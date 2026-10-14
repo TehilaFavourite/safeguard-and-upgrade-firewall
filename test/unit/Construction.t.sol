@@ -25,6 +25,7 @@ abstract contract ConstructionTest is FirewallTestBase {
 
     function test_Constructor_StoresCanonicalAddresses() public view {
         assertEq(guard.SAFE(), address(safe));
+        assertEq(guard.expectedSingleton(), infra.singleton);
         assertEq(guard.MULTISEND_CALL_ONLY(), infra.multiSendCallOnly);
         assertEq(guard.PERMIT2(), infra.permit2);
     }
@@ -33,6 +34,13 @@ abstract contract ConstructionTest is FirewallTestBase {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
         cfg.safe = address(0);
         vm.expectRevert(abi.encodeWithSelector(ISafeFirewallGuard.ZeroAddress.selector, "safe"));
+        new SafeFirewallGuard(cfg);
+    }
+
+    function test_Constructor_RevertsOnZeroSingleton() public {
+        ISafeFirewallGuard.FirewallConfig memory cfg = _config();
+        cfg.singleton = address(0);
+        vm.expectRevert(abi.encodeWithSelector(ISafeFirewallGuard.ZeroAddress.selector, "singleton"));
         new SafeFirewallGuard(cfg);
     }
 

@@ -13,6 +13,7 @@ abstract contract ForkSafe is FirewallTestBase {
     address internal constant SAFE_PROXY_FACTORY = 0x14F2982D601c9458F93bd70B218933A6f8165e7b; // :32
     address internal constant COMPATIBILITY_FALLBACK_HANDLER = 0x3EfCBb83A4A7AfcB4F68D501E2c2203a38be77f4; // :39
     address internal constant MULTISEND_CALL_ONLY = 0xA83c336B20401Af773B6219BA5027174338D1836; // :48
+    address internal constant MULTISEND = 0x218543288004CD07832472D464648173c77D7eB7; // :47
     // Permit2 is not part of the Safe repository. Source citation pending (see the Phase 1 report);
     // the fork setup checks that code exists here.
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
@@ -40,12 +41,14 @@ abstract contract ForkSafe is FirewallTestBase {
         _requireCode("SafeProxyFactory", SAFE_PROXY_FACTORY);
         _requireCode("CompatibilityFallbackHandler", COMPATIBILITY_FALLBACK_HANDLER);
         _requireCode("MultiSendCallOnly", MULTISEND_CALL_ONLY);
+        _requireCode("MultiSend", MULTISEND);
         _requireCode("Permit2", PERMIT2);
 
         i.singleton = SAFE_SINGLETON;
         i.proxyFactory = SAFE_PROXY_FACTORY;
         i.fallbackHandler = COMPATIBILITY_FALLBACK_HANDLER;
         i.multiSendCallOnly = MULTISEND_CALL_ONLY;
+        i.multiSend = MULTISEND;
         i.permit2 = PERMIT2;
     }
 

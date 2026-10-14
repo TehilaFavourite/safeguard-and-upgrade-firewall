@@ -29,12 +29,31 @@ abstract contract FirewallTestBase is Test {
     ///      inner call fails (lib/safe-smart-account/contracts/Safe.sol:184).
     uint256 internal constant NON_ZERO_SAFE_TX_GAS = 100_000;
 
+    // SENTINEL_MODULES, lib/safe-smart-account/contracts/base/ModuleManager.sol:62
+    address internal constant SENTINEL_MODULES = address(0x1);
+    /// @dev Page size large enough to read every module any test creates.
+    uint256 internal constant MODULE_READ_PAGE = 64;
+
     struct SafeInfra {
         address singleton;
         address proxyFactory;
         address fallbackHandler;
         address multiSendCallOnly;
+        address multiSend;
         address permit2;
+    }
+
+    /// @notice Every `execTransaction` parameter except signatures, for tests that set refund fields.
+    struct SafeTx {
+        address to;
+        uint256 value;
+        bytes data;
+        Enum.Operation operation;
+        uint256 safeTxGas;
+        uint256 baseGas;
+        uint256 gasPrice;
+        address gasToken;
+        address payable refundReceiver;
     }
 
     SafeInfra internal infra;
@@ -61,15 +80,32 @@ abstract contract FirewallTestBase is Test {
             address(safe), 0, abi.encodeCall(IModuleManager.enableModule, (address(module))), Enum.Operation.Call
         );
 
-        guard = new SafeFirewallGuardHarness(_config());
+        _beforeGuardInstall();
+        guard = _newGuard(_config());
         _installGuard(address(guard));
     }
+
+    /// @notice Which guard contract the test installs. Test-only subclasses that disable one seam
+    ///         override this (ADR 0020).
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        virtual
+        returns (SafeFirewallGuardHarness)
+    {
+        return new SafeFirewallGuardHarness(config);
+    }
+
+    /// @notice Runs before the guard is installed, while Safe state can still change freely.
+    function _beforeGuardInstall() internal virtual {}
 
     // ---------------------------------------------------------------- setup helpers
 
     function _config() internal view returns (ISafeFirewallGuard.FirewallConfig memory) {
         return ISafeFirewallGuard.FirewallConfig({
-            safe: address(safe), multiSendCallOnly: infra.multiSendCallOnly, permit2: infra.permit2
+            safe: address(safe),
+            singleton: infra.singleton,
+            multiSendCallOnly: infra.multiSendCallOnly,
+            permit2: infra.permit2
         });
     }
 
@@ -165,7 +201,73 @@ abstract contract FirewallTestBase is Test {
         safe.execTransaction(to, value, data, op, 0, 0, 0, address(0), payable(address(0)), sigs);
     }
 
+    function _safeTx(address to, uint256 value, bytes memory data, Enum.Operation op)
+        internal
+        pure
+        returns (SafeTx memory t)
+    {
+        t.to = to;
+        t.value = value;
+        t.data = data;
+        t.operation = op;
+    }
+
+    function _signTx(SafeTx memory t) internal view returns (bytes memory) {
+        return _sign(
+            safe.getTransactionHash(
+                t.to,
+                t.value,
+                t.data,
+                t.operation,
+                t.safeTxGas,
+                t.baseGas,
+                t.gasPrice,
+                t.gasToken,
+                t.refundReceiver,
+                safe.nonce()
+            )
+        );
+    }
+
+    function _execTx(SafeTx memory t) internal returns (bool) {
+        bytes memory sigs = _signTx(t);
+        return safe.execTransaction(
+            t.to, t.value, t.data, t.operation, t.safeTxGas, t.baseGas, t.gasPrice, t.gasToken, t.refundReceiver, sigs
+        );
+    }
+
+    /// @dev Same signing-before-expectRevert rule as `_execSignedExpectRevert`.
+    function _execTxExpectRevert(SafeTx memory t, bytes memory revertData) internal {
+        bytes memory sigs = _signTx(t);
+        vm.expectRevert(revertData);
+        safe.execTransaction(
+            t.to, t.value, t.data, t.operation, t.safeTxGas, t.baseGas, t.gasPrice, t.gasToken, t.refundReceiver, sigs
+        );
+    }
+
     function _readSlotAddress(bytes32 slot) internal view returns (address) {
         return abi.decode(safe.getStorageAt(uint256(slot), 1), (address));
+    }
+
+    // ---------------------------------------------------------------- protected-state encodings (ADR 0020)
+
+    function _b32(address a) internal pure returns (bytes32) {
+        return bytes32(uint256(uint160(a)));
+    }
+
+    function _modules() internal view returns (address[] memory list) {
+        (list,) = safe.getModulesPaginated(SENTINEL_MODULES, MODULE_READ_PAGE);
+    }
+
+    function _hashList(address[] memory list) internal pure returns (bytes32) {
+        return keccak256(abi.encode(list));
+    }
+
+    function _changed(ISafeFirewallGuard.ProtectedField field, bytes32 beforeValue, bytes32 afterValue)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodeWithSelector(ISafeFirewallGuard.ProtectedStateChanged.selector, field, beforeValue, afterValue);
     }
 }

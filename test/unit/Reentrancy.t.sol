@@ -85,7 +85,7 @@ abstract contract ReentrancyTest is FirewallTestBase {
             address(safe), _signedExecCalldata(recipient, 1 wei, "", Enum.Operation.Call, 0, n + 1)
         );
 
-        bool[] memory ok = sequencer.run(steps);
+        (bool[] memory ok,) = sequencer.run(steps);
 
         assertTrue(ok[0] && ok[1], "both executions must succeed");
         assertEq(safe.nonce(), n + 2);
@@ -102,7 +102,7 @@ abstract contract ReentrancyTest is FirewallTestBase {
         steps[1] =
             SequenceExecutor.Step(address(safe), _signedExecCalldata(recipient, 1 wei, "", Enum.Operation.Call, 0, n));
 
-        bool[] memory ok = sequencer.run(steps);
+        (bool[] memory ok,) = sequencer.run(steps);
 
         assertFalse(ok[0], "first execution must be blocked");
         assertTrue(ok[1], "second execution must not see a stuck flag");
@@ -121,7 +121,7 @@ abstract contract ReentrancyTest is FirewallTestBase {
             address(safe), _signedExecCalldata(recipient, 1 wei, "", Enum.Operation.Call, 0, n + 1)
         );
 
-        bool[] memory ok = sequencer.run(steps);
+        (bool[] memory ok,) = sequencer.run(steps);
 
         assertTrue(ok[0], "execTransaction returns (not reverts) when the inner call fails with safeTxGas > 0");
         assertTrue(ok[1], "second execution must not see a stuck flag");

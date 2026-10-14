@@ -13,6 +13,7 @@ contract ForkInfraTest is FeatureForkSafe {
         assertGt(SAFE_PROXY_FACTORY.code.length, 0, "SafeProxyFactory");
         assertGt(COMPATIBILITY_FALLBACK_HANDLER.code.length, 0, "CompatibilityFallbackHandler");
         assertGt(MULTISEND_CALL_ONLY.code.length, 0, "MultiSendCallOnly");
+        assertGt(MULTISEND.code.length, 0, "MultiSend");
         assertGt(PERMIT2.code.length, 0, "Permit2");
     }
 

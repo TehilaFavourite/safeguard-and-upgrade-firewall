@@ -64,9 +64,10 @@ abstract contract GuardCallTest is FirewallTestBase {
 
     // ---------------------------------------------------------------- I1.11 scaffolding
 
-    /// @dev Phase 1 scaffolding only: the skeleton allows ordinary calls. Phase 2 policy is expected
-    ///      to make this test fail (ETH to an unlisted recipient). It is deleted in Phase 2, and the
-    ///      red-before-green rule in docs/test-plan.md applies.
+    /// @dev Scaffolding: until the allowlist exists, ordinary calls are allowed. Phase 2 adds no
+    ///      allowlist (refunds, delegatecall policy and protected state don't affect a plain ETH
+    ///      transfer), so this test keeps passing until Phase 6, where the allowlist (P2) makes it
+    ///      fail. It is deleted then, under the red-before-green rule in docs/test-plan.md.
     function test_Skeleton_AllowsOrdinaryCall() public {
         address recipient = makeAddr("recipient");
         assertTrue(_execSigned(recipient, 1 ether, "", Enum.Operation.Call));
