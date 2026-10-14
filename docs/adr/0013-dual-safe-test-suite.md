@@ -70,6 +70,22 @@ test runs against both.
     - `data = transfer(0xbdd077f651ebe7f7b3ce16fe5f2b025be2969516, 0)`;
     - `safeTxGas = 45746`.
 - **Chain check:** the fork variant reverts with `WrongChain` unless `block.chainid == 1`.
+- **RPC rate limits** (owner, 2026-10-14). In Phase 1, a fuzzed `vm.prank(caller)` on the fork
+  fetched every fuzzed account over RPC, and the provider returned HTTP 429 at run 207 of 256.
+  Therefore:
+  - **fork test contracts only** run **64 fuzz runs**, through a contract-level
+    `/// forge-config: default.fuzz.runs = 64`. The unit variant keeps the configured 256.
+  - The `mainnet` endpoint in `foundry.toml` sets `retries = 5`, `retry_backoff = 1000` (ms) and
+    `compute_units_per_second = 100`. Profile-level `fork_retries` etc. are not recognised by this
+    forge version (it warns "unknown config"); the per-endpoint table is.
+  - **The endpoint throttle alone was not enough.** With suites running in parallel, 429s
+    persisted at both 330 and 100 CUPS. A failing fork fuzz test passed when run alone. The
+    working fix is to **run the suite single-threaded: `forge test -j 1`**, which passed 84/84 in
+    26 s, faster than the parallel runs, which spent their time in retry back-off. `-j 1` is the
+    required invocation whenever the fork variant runs, locally and in CI.
+
+  Fuzz depth comes from the unit variant. The fork variant's job is to confirm the same behaviour
+  against production bytecode.
 - **CI:** the forge-generated `.github/workflows/test.yml` runs `forge test`. Fork tests need an
   `ETH_RPC_URL` secret. Without one they must be skipped explicitly, not silently pass.
 

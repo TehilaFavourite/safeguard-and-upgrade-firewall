@@ -135,6 +135,7 @@ contract ReentrancyUnitTest is ReentrancyTest, LocalSafe {
     }
 }
 
+/// forge-config: default.fuzz.runs = 64
 contract ReentrancyForkTest is ReentrancyTest, FeatureForkSafe {
     function setUp() public override(ReentrancyTest, FirewallTestBase) {
         ReentrancyTest.setUp();

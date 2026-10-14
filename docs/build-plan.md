@@ -45,8 +45,10 @@ bot/                           alert bot (Phase 12)
    execute and signer-cancel, in the exact shape from ADR 0014. On the module path, escape and
    config calls are rejected;
 6. **R2:** the exact cancellation transaction always passes;
-7. snapshot the protected slots into transient storage;
-8. run the policy pipeline on the call, or on every inner call of a strictly decoded
+7. reject every other call to `GUARD` (ADR 0018). This comes after R1, because escape calls are
+   calls to `GUARD`;
+8. snapshot the protected slots into transient storage;
+9. run the policy pipeline on the call, or on every inner call of a strictly decoded
    `MultiSendCallOnly` batch, accumulating per-token outflow in the transient token map.
 
 **Post-hooks**, in this order:
@@ -72,7 +74,9 @@ bot/                           alert bot (Phase 12)
   threat-model mitigation to a planned test name, and flags any requirement with no test.
 - **1. Skeleton and harness.** Interfaces, an empty guard, the factory, `FirewallTestBase` with
   both Safe sources, the caller check, the reentrancy flag and path tracking.
-- **2. Bybit stopper.**
+- **2. Bybit stopper.** Candidate for the owner to accept or reject in the Phase 2 invariant
+  proposal: return a real hash of the module call parameters from `checkModuleTransaction`, store
+  it in transient storage, and check it in `checkAfterModuleExecution`.
   - Delegatecall policy: on the signed path only the pinned `MultiSendCallOnly`; on the module
     path never.
   - Refund ban, R2 cancellation, protected-slot snapshot and compare.
@@ -131,5 +135,6 @@ bot/                           alert bot (Phase 12)
 - **13. Finish.**
   - README: problem, Bybit walkthrough, architecture diagram, design principles, threat-model
     summary, known limitations, how to run the tests and the demo, gas report.
-  - CI workflow: fmt, build, test, coverage and Slither, with fork tests gated on the RPC secret.
+  - CI workflow: fmt, build, test, coverage and Slither, with fork tests gated on the RPC secret
+    and run with `forge test -j 1` (ADR 0013).
   - A final pass checking that every ADR matches the code.

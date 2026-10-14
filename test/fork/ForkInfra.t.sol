@@ -6,6 +6,7 @@ import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 /// @notice I1.10: the fork variant runs against real mainnet code. ForkSafe already reverts in
 ///         setUp if any canonical contract has no code. This test makes that check visible as its
 ///         own result, and pins the Safe version string.
+/// forge-config: default.fuzz.runs = 64
 contract ForkInfraTest is FeatureForkSafe {
     function test_ForkInfra_CanonicalContractsHaveCode() public view {
         assertGt(SAFE_SINGLETON.code.length, 0, "Safe singleton");

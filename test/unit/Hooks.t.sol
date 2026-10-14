@@ -88,4 +88,5 @@ abstract contract HooksTest is FirewallTestBase {
 
 contract HooksUnitTest is HooksTest, LocalSafe {}
 
+/// forge-config: default.fuzz.runs = 64
 contract HooksForkTest is HooksTest, FeatureForkSafe {}

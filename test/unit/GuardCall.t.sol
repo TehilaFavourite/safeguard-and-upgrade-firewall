@@ -76,4 +76,5 @@ abstract contract GuardCallTest is FirewallTestBase {
 
 contract GuardCallUnitTest is GuardCallTest, LocalSafe {}
 
+/// forge-config: default.fuzz.runs = 64
 contract GuardCallForkTest is GuardCallTest, FeatureForkSafe {}

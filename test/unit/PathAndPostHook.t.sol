@@ -88,6 +88,7 @@ contract PathAndPostHookUnitTest is PathAndPostHookTest, LocalSafe {
     }
 }
 
+/// forge-config: default.fuzz.runs = 64
 contract PathAndPostHookForkTest is PathAndPostHookTest, FeatureForkSafe {
     function setUp() public override(PathAndPostHookTest, FirewallTestBase) {
         PathAndPostHookTest.setUp();

@@ -59,7 +59,8 @@ backlog. No open-ended design rounds.
    reviews every assertion.
 3. **Implementation.** Implement until all tests pass on both Safe sources: the local build, and
    the fork singleton when `ETH_RPC_URL` is set (ADR 0013).
-4. **Checks.** Run `forge fmt --check`, `forge build`, `forge test`, `forge coverage` and Slither.
+4. **Checks.** Run `forge fmt --check`, `forge build`, `forge test -j 1` (single-threaded, because
+   the fork variant hits RPC rate limits in parallel; ADR 0013), `forge coverage` and Slither.
    Report the results as they are, including failures.
 5. **Summary.** A five-line summary, any decisions that came up, and the proposed commits.
 

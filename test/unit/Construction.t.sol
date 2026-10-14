@@ -180,6 +180,7 @@ contract ConstructionUnitTest is ConstructionTest, LocalSafe {
     }
 }
 
+/// forge-config: default.fuzz.runs = 64
 contract ConstructionForkTest is ConstructionTest, FeatureForkSafe {
     function setUp() public override(ConstructionTest, FirewallTestBase) {
         ConstructionTest.setUp();
