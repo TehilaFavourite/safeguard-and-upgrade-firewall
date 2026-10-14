@@ -8,7 +8,7 @@ import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 
 /// @notice I1.12: in Phase 1 every top-level call with `to == GUARD` reverts, because no config or
 ///         escape selectors exist yet (ADR 0018). Batch inner calls are covered in Phase 3.
@@ -79,4 +79,4 @@ abstract contract GuardCallTest is FirewallTestBase {
 
 contract GuardCallUnitTest is GuardCallTest, LocalSafe {}
 
-contract GuardCallForkTest is GuardCallTest, ForkSafe {}
+contract GuardCallForkTest is GuardCallTest, FeatureForkSafe {}

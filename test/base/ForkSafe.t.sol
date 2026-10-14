@@ -2,13 +2,12 @@
 pragma solidity 0.8.28;
 
 import {FirewallTestBase} from "./FirewallTestBase.sol";
+import {ForkBlocks} from "./ForkBlocks.sol";
 
 /// @notice Fork variant: the deployed mainnet Safe v1.5.0 contracts at a pinned block (ADR 0013).
+///         The block is chosen by the concrete variant through `_forkBlock()`. Shared harness code
+///         never hard-codes one.
 abstract contract ForkSafe is FirewallTestBase {
-    /// @dev Pinned mainnet block. Set to the latest block once ETH_RPC_URL is available. While it
-    ///      is 0, the fork variant skips, and says so in the output.
-    uint256 internal constant FORK_BLOCK = 0;
-
     // Canonical Safe v1.5.0 addresses, from lib/safe-smart-account/CHANGELOG.md
     address internal constant SAFE_SINGLETON = 0xFf51A5898e281Db6DfC7855790607438dF2ca44b; // :25
     address internal constant SAFE_PROXY_FACTORY = 0x14F2982D601c9458F93bd70B218933A6f8165e7b; // :32
@@ -23,14 +22,18 @@ abstract contract ForkSafe is FirewallTestBase {
     error MissingCode(string name, address at);
     error WrongChain(uint256 chainId);
 
+    /// @notice The mainnet block this variant forks at. It must be a block where the canonical
+    ///         v1.5.0 contracts exist (checked below).
+    function _forkBlock() internal pure virtual returns (uint256);
+
     function _deploySafe() internal override returns (SafeInfra memory i) {
         string memory rpc = vm.envOr("ETH_RPC_URL", string(""));
-        if (bytes(rpc).length == 0 || FORK_BLOCK == 0) {
-            vm.skip(true, "fork variant skipped: ETH_RPC_URL unset or FORK_BLOCK not pinned");
+        if (bytes(rpc).length == 0) {
+            vm.skip(true, "fork variant skipped: ETH_RPC_URL unset");
             return i;
         }
         // "mainnet" is the [rpc_endpoints] alias in foundry.toml, which reads ETH_RPC_URL from .env.
-        vm.createSelectFork("mainnet", FORK_BLOCK);
+        vm.createSelectFork("mainnet", _forkBlock());
         if (block.chainid != MAINNET_CHAIN_ID) revert WrongChain(block.chainid);
 
         _requireCode("Safe singleton", SAFE_SINGLETON);
@@ -48,5 +51,12 @@ abstract contract ForkSafe is FirewallTestBase {
 
     function _requireCode(string memory name, address at) private view {
         if (at.code.length == 0) revert MissingCode(name, at);
+    }
+}
+
+/// @notice Fork variant used by feature and infra tests: a recent block (ADR 0013).
+abstract contract FeatureForkSafe is ForkSafe {
+    function _forkBlock() internal pure override returns (uint256) {
+        return ForkBlocks.FEATURE;
     }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
+import {Vm} from "forge-std/Vm.sol";
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
@@ -9,7 +10,7 @@ import {SafeFirewallGuard} from "../../src/SafeFirewallGuard.sol";
 import {GuardFactory} from "../../src/GuardFactory.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 
 /// @notice I1.4 (constructor immutables) and I1.5 (factory).
 abstract contract ConstructionTest is FirewallTestBase {
@@ -51,12 +52,24 @@ abstract contract ConstructionTest is FirewallTestBase {
 
     // ---------------------------------------------------------------- I1.5 factory
 
+    /// @dev Permissionless and caller-independent (ADR 0007). A reference deployment by this test
+    ///      contract is recorded, then the state is rewound so the fuzzed caller deploys from the same
+    ///      starting point. Address, runtime code and bound Safe must all be identical.
     function testFuzz_Factory_AnyoneCanDeploy(address caller) public {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
+
+        uint256 snapshot = vm.snapshotState();
+        address refGuard = factory.deploy(cfg);
+        bytes32 refCodehash = refGuard.codehash;
+        vm.revertToState(snapshot);
+        assertEq(refGuard.code.length, 0, "rewind failed");
+
         vm.prank(caller);
         address deployed = factory.deploy(cfg);
-        assertEq(deployed, factory.predict(cfg));
-        assertGt(deployed.code.length, 0);
+
+        assertEq(deployed, refGuard, "address depends on caller");
+        assertEq(deployed.codehash, refCodehash, "runtime code depends on caller");
+        assertEq(ISafeFirewallGuard(deployed).SAFE(), address(safe), "bound Safe depends on caller");
     }
 
     /// @dev The expected address is computed here independently of `predict`, from
@@ -123,17 +136,41 @@ abstract contract ConstructionTest is FirewallTestBase {
         assertEq(vm.getRecordedLogs().length, 0);
     }
 
-    /// @dev A third party front-runs with the identical config. The Safe's own deploy, the first
-    ///      step of the install batch, must still succeed and return the same guard. Phase 9 repeats
-    ///      this against the full batch.
+    /// @dev A third party front-runs with the identical config. Calls from the Safe, as in the
+    ///      install batch's first step, must still succeed, return the pre-deployed guard, and emit
+    ///      no GuardDeployed. Phase 9 repeats this against the full batch.
+    ///      The signed path can't surface the return value: `execute` calls with output size 0
+    ///      (Executor.sol:39) and `execTransaction` returns only `bool` (Safe.sol:126). So the
+    ///      signed leg checks success and the absence of the event, and the module leg, which
+    ///      copies return data (ModuleManager.sol:168-191), checks the returned address.
     function test_Factory_ThirdPartyPreDeployDoesNotBreakSafeDeploy() public {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
         vm.prank(makeAddr("frontRunner"));
         address preDeployed = factory.deploy(cfg);
+        bytes memory deployCall = abi.encodeCall(GuardFactory.deploy, (cfg));
 
-        assertTrue(_execSigned(address(factory), 0, abi.encodeCall(GuardFactory.deploy, (cfg)), Enum.Operation.Call));
-        assertEq(factory.predict(cfg), preDeployed);
-        assertEq(ISafeFirewallGuard(preDeployed).SAFE(), address(safe));
+        // Signed leg: succeeds and emits no GuardDeployed.
+        vm.recordLogs();
+        assertTrue(_execSigned(address(factory), 0, deployCall, Enum.Operation.Call), "signed deploy failed");
+        assertEq(_countGuardDeployed(vm.getRecordedLogs()), 0, "signed leg emitted GuardDeployed");
+
+        // Module leg: the Safe's call returns the pre-deployed address and emits no GuardDeployed.
+        vm.recordLogs();
+        (bool ok, bytes memory ret) = module.execReturnData(safe, address(factory), 0, deployCall, Enum.Operation.Call);
+        assertTrue(ok, "module deploy failed");
+        assertEq(abi.decode(ret, (address)), preDeployed, "Safe's deploy call did not return the pre-deployed guard");
+        assertEq(_countGuardDeployed(vm.getRecordedLogs()), 0, "module leg emitted GuardDeployed");
+    }
+
+    function _countGuardDeployed(Vm.Log[] memory logs) internal view returns (uint256 n) {
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(factory) && logs[i].topics.length > 0
+                    && logs[i].topics[0] == IGuardFactory.GuardDeployed.selector
+            ) {
+                n++;
+            }
+        }
     }
 }
 
@@ -143,7 +180,7 @@ contract ConstructionUnitTest is ConstructionTest, LocalSafe {
     }
 }
 
-contract ConstructionForkTest is ConstructionTest, ForkSafe {
+contract ConstructionForkTest is ConstructionTest, FeatureForkSafe {
     function setUp() public override(ConstructionTest, FirewallTestBase) {
         ConstructionTest.setUp();
     }

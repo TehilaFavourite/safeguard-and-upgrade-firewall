@@ -9,7 +9,7 @@ import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 
 /// @notice I1.1 (caller check), I1.2 (ERC-165), I1.3 (Safe accepts the guard).
 abstract contract HooksTest is FirewallTestBase {
@@ -88,4 +88,4 @@ abstract contract HooksTest is FirewallTestBase {
 
 contract HooksUnitTest is HooksTest, LocalSafe {}
 
-contract HooksForkTest is HooksTest, ForkSafe {}
+contract HooksForkTest is HooksTest, FeatureForkSafe {}

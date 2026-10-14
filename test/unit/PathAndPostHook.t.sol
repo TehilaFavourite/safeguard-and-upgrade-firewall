@@ -6,7 +6,7 @@ import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 import {PathProbe} from "../mocks/PathProbe.sol";
 
 /// @notice I1.8 (path tracking) and I1.9 (post-hook needs a matching pre-hook; ADR 0018).
@@ -88,7 +88,7 @@ contract PathAndPostHookUnitTest is PathAndPostHookTest, LocalSafe {
     }
 }
 
-contract PathAndPostHookForkTest is PathAndPostHookTest, ForkSafe {
+contract PathAndPostHookForkTest is PathAndPostHookTest, FeatureForkSafe {
     function setUp() public override(PathAndPostHookTest, FirewallTestBase) {
         PathAndPostHookTest.setUp();
     }

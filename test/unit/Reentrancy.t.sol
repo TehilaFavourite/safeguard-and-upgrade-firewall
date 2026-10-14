@@ -6,7 +6,7 @@ import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 import {Forwarder} from "../mocks/Forwarder.sol";
 import {TestModule} from "../mocks/TestModule.sol";
 import {SequenceExecutor} from "../mocks/SequenceExecutor.sol";
@@ -129,7 +129,7 @@ contract ReentrancyUnitTest is ReentrancyTest, LocalSafe {
     }
 }
 
-contract ReentrancyForkTest is ReentrancyTest, ForkSafe {
+contract ReentrancyForkTest is ReentrancyTest, FeatureForkSafe {
     function setUp() public override(ReentrancyTest, FirewallTestBase) {
         ReentrancyTest.setUp();
     }

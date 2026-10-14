@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
-import {ForkSafe} from "../base/ForkSafe.t.sol";
+import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 
 /// @notice I1.10: the fork variant runs against real mainnet code. ForkSafe already reverts in
 ///         setUp if any canonical contract has no code. This test makes that check visible as its
 ///         own result, and pins the Safe version string.
-contract ForkInfraTest is ForkSafe {
+contract ForkInfraTest is FeatureForkSafe {
     function test_ForkInfra_CanonicalContractsHaveCode() public view {
         assertGt(SAFE_SINGLETON.code.length, 0, "Safe singleton");
         assertGt(SAFE_PROXY_FACTORY.code.length, 0, "SafeProxyFactory");
