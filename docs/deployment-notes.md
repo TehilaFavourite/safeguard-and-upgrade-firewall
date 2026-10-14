@@ -15,9 +15,10 @@ Migrating after the guard is installed would therefore be blocked, so the order 
    (`SafeMigration.sol:45-46`), and `MultiSendCallOnly` reverts on inner delegatecalls
    (`MultiSendCallOnly.sol:57-58`).
 2. **Install as one atomic batch** (a single Safe transaction delegatecalling `MultiSendCallOnly`):
-   0. CALL `GuardFactory.deploy(config)`. It requires `msg.sender == safe`, which holds for a batch
-      inner call. The guard lands at the address predicted from (safe, version, constructor args),
-      which the later steps use (ADR 0007).
+   0. CALL `GuardFactory.deploy(config)`. The factory is permissionless and idempotent: if anyone
+      has already deployed this exact guard, the call returns the existing address, so the batch
+      does not revert. The guard lands at the address predicted from (safe, version, constructor
+      args), which the later steps use (ADR 0007).
    1. CALL a checker contract that reads the Safe's module list and reverts unless it matches an
       expected hash. The check runs at execution time, not proposal time, so it cannot go stale.
    2. Revoke every (token, spender) pair on the reviewed allowance list (`approve(spender, 0)`),

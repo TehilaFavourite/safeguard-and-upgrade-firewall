@@ -34,7 +34,9 @@ It must also be one of these two forms:
 
 1. `to == GUARD`, with selector `queueEscape`, or (signed path only) `cancelEscape`.
 2. `to == SAFE`, calling `setGuard(x)` or `setModuleGuard(x)`, where `x` matches a matured,
-   unexpired escape item.
+   unexpired escape item. The item binds the new guard's **address and `extcodehash`**. The call
+   is accepted only if `x` currently has exactly that code (owner, 2026-10-14). For removal
+   (`x == 0`), no codehash applies.
 
 Everything else goes through the normal pipeline.
 
@@ -54,6 +56,12 @@ Everything else goes through the normal pipeline.
 (ADR 0007, ADR 0008).
 
 ## Consequences
+
+- **The replacement guard is deployed outside the Safe.** The factory is permissionless and
+  idempotent (ADR 0007), so anyone can deploy the replacement at its predicted address before
+  `setModuleGuard(x)` runs. No Safe transaction to the factory is needed, so the escape path stays
+  free of policy (R1). If `x` has no code, or different code, when `setModuleGuard(x)` or
+  `setGuard(x)` runs, the call reverts.
 
 - R1 code depends only on:
   - the caller check;

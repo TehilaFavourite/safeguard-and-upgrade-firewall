@@ -68,7 +68,8 @@ above that) (ADR 0005).
    cap per 24h (ADR 0012). Unconfigured tokens have cap 0. ETH
    `value` counts. Approvals count in full at approval time. Unlimited approvals are rejected.
    Spenders must be allowlisted, except that `approve(_, 0)` and `approve(_, 1)` skip the spender
-   allowlist (1 still counts against the bucket). Permit2 is never allowlisted. `setApprovalForAll(op, true)` is a
+   allowlist (1 still counts against the bucket). Permit2 is never allowlisted: `approve(Permit2, 0)`
+   passes, and any non-zero approval to Permit2 is rejected. `setApprovalForAll(op, true)` is a
    hard reject. Exact-match revocations pass and
    are not counted. The running total accumulates across a batch (ADR 0004).
 
@@ -123,8 +124,10 @@ above that) (ADR 0005).
   script verifies their `extcodehash` against mainnet (ADR 0013).
 
 ## Install (one atomic `MultiSendCallOnly` batch; migration is a separate transaction before it)
-0. `GuardFactory.deploy(config)`, as a CALL from the Safe. All config is in constructor arguments,
-   and the address is predicted from (safe, version, constructor args) (ADR 0007).
+0. `GuardFactory.deploy(config)`, as a CALL from the Safe. The factory is permissionless and
+   idempotent: an existing deployment at the predicted address is returned, not re-deployed. All
+   config is in constructor arguments, and the address is predicted from
+   (safe, version, constructor args) (ADR 0007).
 1. Checker contract: the module list must match the expected hash (full list, `next == SENTINEL`).
 2. Revoke every pair on the reviewed (token, spender) list from the `Approval` event scan,
    including Permit2 on every held token. Revocations are dry-run on a fork first; tokens that
@@ -145,22 +148,15 @@ Guard + factory, install checker, alert bot, Bybit fork demo, runbook.
 ---
 
 ## Open v1 items (decide before writing tests)
-1. **Bybit Safe version.** Verify on the fork (needs `ETH_RPC_URL`).
-2. **Tokens that revert on `approve(_, 0)`.** Verify BNB and any scanned tokens on the fork (needs
-   `ETH_RPC_URL`).
-3. **Deploying a replacement guard under the old guard (conflicts with R1).** The factory requires
-   `msg.sender == safe`, so a replacement guard (escape path) must be deployed by a Safe
-   transaction. That transaction (`to == FACTORY`) is checked by the **old** guard's pipeline,
-   where the factory is not allowlisted (P2). R1 requires the escape path to work without depending
-   on policy. Options:
-   - recognize `FACTORY.deploy(config)` as an R1 escape-shape call when its predicted address
-     equals the `x` of a queued, unexpired escape item;
-   - or allowlist the factory at install (but then the escape path depends on the allowlist).
-4. **`approve(Permit2, 1)` (ADR 0004).** The new rule lets `approve(_, 1)` skip the spender
-   allowlist, so it also lets the Safe give Permit2 an allowance of 1 unit. That contradicts
-   "Permit2 is never allowlisted" and stochastic invariant V7. Options:
-   - exclude Permit2 from the `approve(_, 1)` exception;
-   - or relax V7 to "Permit2 allowance ≤ 1 unit".
+1. **Bybit Safe version.** Verify on a mainnet fork. Blocked: the configured `ETH_RPC_URL` reports
+   chain ID 11155111 (Sepolia), not 1.
+2. **Tokens that revert on `approve(_, 0)`.** Verify BNB and any scanned tokens on a mainnet fork.
+   Blocked for the same reason.
+
+Resolved 2026-10-14 (fourth round):
+- the factory is permissionless and idempotent, and escape items bind the new guard's address and
+  `extcodehash` (ADR 0007, 0014);
+- Permit2 is excluded from the `approve(_, 1)` exception (ADR 0004).
 
 Resolved 2026-10-14 (third round):
 - factory and constructor-only config (ADR 0007);

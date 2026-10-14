@@ -86,6 +86,9 @@ where it has control.
    - **Resolved (owner, 2026-10-14):** `approve(spender, 0)` **and** `approve(spender, 1)` skip
      the spender allowlist. Amount 1 still counts against the bucket, which covers tokens with 0
      decimals, where 1 unit can matter. `approve(_, 0)` is still not counted (item 2).
+   - **Permit2 is excluded from the `approve(_, 1)` exception** (owner, 2026-10-14).
+     `approve(Permit2, 0)` passes as a revocation. **Any** non-zero approval to Permit2 is
+     rejected. Invariant V7 ("no Permit2 allowance is ever granted") stays strict.
 
 ## Original open questions
 

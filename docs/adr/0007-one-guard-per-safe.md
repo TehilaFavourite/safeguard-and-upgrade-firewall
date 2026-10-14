@@ -39,10 +39,18 @@ Owner's reasoning: limits the blast radius, removes `msg.sender`-keyed state, si
 - **Deployment (owner, 2026-10-14; resolves the factory front-running item):**
   - **All guard config is passed as constructor arguments**, and there is never an `initialize()`.
     The CREATE2 address therefore commits to the full config.
-  - `GuardFactory.deploy(config)` reverts with `NotSafe` unless `msg.sender == config.safe`.
   - Salt = `keccak256(abi.encode(safe, VERSION))`. The address is predicted from
     (safe, version, constructor args), and a different config gives a different address.
+  - *(Amended 2026-10-14, owner.)* **`GuardFactory.deploy(config)` is permissionless and
+    idempotent.** If code already exists at the predicted address, it returns that address and
+    emits nothing; it does not revert.
+    - A front-runner can only deploy the **identical** guard, because constructor-only config ties
+      the address to the config.
+    - Idempotence removes the griefing case: a pre-deployment by a third party doesn't make the
+      owner's deploy, or the install batch, revert.
+    - This replaces the earlier "only the Safe may deploy" rule, which blocked the escape path (see
+      ADR 0014): a Safe transaction to the factory would be checked by the old guard's policy.
   - **No factory-level "one guard per Safe" rule.** A replacement guard (escape path, ADR 0014) is
-    a new deployment with its own config.
+    a new deployment with its own config, **deployed by anyone outside the Safe**.
   - The install batch deploys the guard as its **first** step (`docs/deployment-notes.md`).
 - The shared guard is v2 backlog (ADR 0009).
