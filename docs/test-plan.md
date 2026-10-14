@@ -175,6 +175,15 @@ A handler mixes signed transactions, module transactions, batches, config change
 | F2 | Migrate → install → replay the decoded payload (ADR 0013), which reverts | `test_Fork_BybitPayloadReverts` (fork only) |
 | F3 | A legitimate proxy upgrade through the timelock succeeds | `test_Fork_LegitProxyUpgradeViaTimelock` (fork only) |
 
+**Phase 11 notes** (owner, 2026-10-14; not built yet; evidence in `docs/bybit-incident.md`):
+- **Migration from 1.1.1.** Check whether the canonical `SafeMigration` works when delegatecalled
+  from a v1.1.1 Safe. If it doesn't, the demo sets slot 0 directly in fork setup (`vm.store`), and
+  the README says so explicitly. Test: `test_Fork_SafeMigrationFrom111` records which path was
+  taken.
+- **Real owners, not test keys.** The demo uses the real Bybit owners. It `vm.prank`s three actual
+  owners (threshold 3, `docs/bybit-incident.md` §2) calling `approveHash` on the replayed payload's
+  transaction hash, instead of replacing the owners with test keys.
+
 ## Phase 12: alert bot (Rust)
 
 | ID | Requirement | Tests |
