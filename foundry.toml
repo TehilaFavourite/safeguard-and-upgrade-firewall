@@ -7,6 +7,10 @@ libs = ["lib"]
 solc_version = "0.8.28"
 evm_version = "cancun"
 
+[rpc_endpoints]
+# Read from .env (git-ignored). Never commit the URL.
+mainnet = "${ETH_RPC_URL}"
+
 [doc]
 out = "docs/forge"
 
