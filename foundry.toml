@@ -1,0 +1,13 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+# Transient storage (EIP-1153) for the reentrancy flag and pre->post outflow handoff (ADR 0005, 0012).
+# `transient` state variables need solc >= 0.8.28; tstore/tload via assembly needs >= 0.8.24.
+solc_version = "0.8.28"
+evm_version = "cancun"
+
+[doc]
+out = "docs/forge"
+
+# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
