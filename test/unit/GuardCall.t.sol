@@ -14,8 +14,8 @@ import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 ///         escape selectors exist yet (ADR 0018). Batch inner calls are covered in Phase 3.
 ///         I1.11: anything else passes the Phase 1 skeleton (scaffolding only).
 abstract contract GuardCallTest is FirewallTestBase {
-    function _expectRejected(bytes4 selector) internal {
-        vm.expectRevert(abi.encodeWithSelector(ISafeFirewallGuard.GuardCallRejected.selector, selector));
+    function _rejection(bytes4 selector) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(ISafeFirewallGuard.GuardCallRejected.selector, selector);
     }
 
     // ---------------------------------------------------------------- I1.12 signed path
@@ -31,27 +31,24 @@ abstract contract GuardCallTest is FirewallTestBase {
             abi.encodeCall(IModuleGuard.checkAfterModuleExecution, (bytes32(0), true))
         ];
         for (uint256 i = 0; i < calls.length; i++) {
-            _expectRejected(bytes4(calls[i]));
-            _execSigned(address(guard), 0, calls[i], Enum.Operation.Call);
+            _execSignedExpectRevert(address(guard), 0, calls[i], Enum.Operation.Call, _rejection(bytes4(calls[i])));
         }
     }
 
     function testFuzz_GuardCall_SignedAnySelectorReverts(bytes calldata data) public {
         vm.assume(data.length >= 4);
-        _expectRejected(bytes4(data[:4]));
-        _execSigned(address(guard), 0, data, Enum.Operation.Call);
+        _execSignedExpectRevert(address(guard), 0, data, Enum.Operation.Call, _rejection(bytes4(data[:4])));
     }
 
     function test_GuardCall_SignedEmptyCalldataReverts() public {
-        _expectRejected(bytes4(0));
-        _execSigned(address(guard), 0, "", Enum.Operation.Call);
+        _execSignedExpectRevert(address(guard), 0, "", Enum.Operation.Call, _rejection(bytes4(0)));
     }
 
     function test_GuardCall_SignedDelegatecallToGuardReverts() public {
         bytes memory data = abi.encodeCall(ITransactionGuard.checkAfterExecution, (bytes32(0), true));
         // forge-lint: disable-next-line(unsafe-typecast)
-        _expectRejected(bytes4(data)); // intended: the first 4 bytes are the selector
-        _execSigned(address(guard), 0, data, Enum.Operation.DelegateCall);
+        bytes memory expected = _rejection(bytes4(data)); // intended: the first 4 bytes are the selector
+        _execSignedExpectRevert(address(guard), 0, data, Enum.Operation.DelegateCall, expected);
     }
 
     // ---------------------------------------------------------------- I1.12 module path
@@ -61,7 +58,7 @@ abstract contract GuardCallTest is FirewallTestBase {
     function test_GuardCall_ModuleCallReverts() public {
         bytes memory data = abi.encodeCall(ITransactionGuard.checkAfterExecution, (bytes32(0), true));
         // forge-lint: disable-next-line(unsafe-typecast)
-        _expectRejected(bytes4(data)); // intended: the first 4 bytes are the selector
+        vm.expectRevert(_rejection(bytes4(data))); // intended: the first 4 bytes are the selector
         module.exec(safe, address(guard), 0, data, Enum.Operation.Call);
     }
 

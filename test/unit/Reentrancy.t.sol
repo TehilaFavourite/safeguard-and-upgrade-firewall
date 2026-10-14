@@ -35,10 +35,13 @@ abstract contract ReentrancyTest is FirewallTestBase {
         bytes memory inner = _signedExecCalldata(recipient, 0, "", Enum.Operation.Call, 0, n + 1);
         bytes memory outerData = abi.encodeCall(Forwarder.forward, (address(safe), inner));
 
-        vm.expectRevert(
+        _execSignedExpectRevert(
+            address(forwarder),
+            0,
+            outerData,
+            Enum.Operation.Call,
             abi.encodeWithSelector(ISafeFirewallGuard.Reentrancy.selector, ISafeFirewallGuard.ExecutionPath.SIGNED)
         );
-        _execSigned(address(forwarder), 0, outerData, Enum.Operation.Call);
     }
 
     /// @dev Outer signed tx calls the module, which calls execTransactionFromModule. The module
@@ -46,10 +49,13 @@ abstract contract ReentrancyTest is FirewallTestBase {
     function test_Reentrancy_ModuleTxInsideSignedTxReverts() public {
         bytes memory moduleCall = abi.encodeCall(TestModule.exec, (safe, recipient, 0, "", Enum.Operation.Call));
 
-        vm.expectRevert(
+        _execSignedExpectRevert(
+            address(module),
+            0,
+            moduleCall,
+            Enum.Operation.Call,
             abi.encodeWithSelector(ISafeFirewallGuard.Reentrancy.selector, ISafeFirewallGuard.ExecutionPath.SIGNED)
         );
-        _execSigned(address(module), 0, moduleCall, Enum.Operation.Call);
     }
 
     /// @dev Module tx calls the Forwarder, which calls safe.execTransaction. The module path does

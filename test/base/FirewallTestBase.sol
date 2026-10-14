@@ -151,6 +151,20 @@ abstract contract FirewallTestBase is Test {
         return safe.execTransaction(to, value, data, op, safeTxGas, 0, 0, address(0), payable(address(0)), sigs);
     }
 
+    /// @dev Signs first, then arms `expectRevert`, so the expectation applies to `execTransaction`
+    ///      itself and not to the `nonce()` / `getTransactionHash()` calls made while signing.
+    function _execSignedExpectRevert(
+        address to,
+        uint256 value,
+        bytes memory data,
+        Enum.Operation op,
+        bytes memory revertData
+    ) internal {
+        bytes memory sigs = _sign(_txHash(to, value, data, op, 0, safe.nonce()));
+        vm.expectRevert(revertData);
+        safe.execTransaction(to, value, data, op, 0, 0, 0, address(0), payable(address(0)), sigs);
+    }
+
     function _readSlotAddress(bytes32 slot) internal view returns (address) {
         return abi.decode(safe.getStorageAt(uint256(slot), 1), (address));
     }
