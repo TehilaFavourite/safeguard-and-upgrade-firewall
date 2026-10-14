@@ -36,7 +36,7 @@ This plan maps every requirement in `docs/v1-spec.md` and every mitigation in
 | H5 | ERC-165 for both guard interfaces; the Safe accepts the guard in both slots | ADR 0001; I1.2, I1.3 | `test_ERC165_SupportsTransactionGuard`, `test_ERC165_SupportsModuleGuard`, `test_ERC165_SupportsIERC165`, `test_ERC165_RejectsInvalidId`, `testFuzz_ERC165_RejectsOtherIds`, `test_Install_SetGuardAndSetModuleGuardAccepted` |
 | H6 | Factory: permissionless and idempotent; the address commits to (safe, version, constructor args) | ADR 0007; I1.5 | `testFuzz_Factory_AnyoneCanDeploy`, `test_Factory_DeploysAtPredictedAddress`, `testFuzz_Factory_DifferentConfigDifferentAddress`, `test_Factory_GuardBoundToSafe`, `test_Factory_EmitsGuardDeployed`, `test_Factory_DeployFromSafeTransaction`, `test_Factory_DeployTwiceReturnsSameAddress`, `test_Factory_SecondDeployEmitsNothing`, `test_Factory_ThirdPartyPreDeployDoesNotBreakSafeDeploy`. Phase 9: `test_InstallBatch_SucceedsAfterThirdPartyPreDeploy` |
 | H7 | Canonical addresses are constructor immutables | ADR 0013; I1.4 | `test_Constructor_StoresCanonicalAddresses`, `test_Constructor_RevertsOnZeroSafe`, `test_Constructor_RevertsOnZeroMultiSendCallOnly`, `test_Constructor_RevertsOnZeroPermit2` |
-| H7b | Fork variant: real mainnet code; skips visibly without RPC | ADR 0013; I1.10 | `test_ForkInfra_CanonicalContractsHaveCode`, `test_ForkInfra_ProxyRunsSafeV150` (fork only) |
+| H7b | Fork variant: real mainnet code at `ForkBlocks.FEATURE`; reverts on a non-mainnet chain; skips visibly without RPC | ADR 0013; I1.10 | `test_ForkInfra_CanonicalContractsHaveCode`, `test_ForkInfra_ProxyRunsSafeV150` (fork only) |
 | H7c | Phase 1 skeleton allows ordinary calls (scaffolding, deleted in Phase 2) | I1.11 | `test_Skeleton_AllowsOrdinaryCall` |
 | H8 | Deploy script verifies `extcodehash` of canonical addresses | ADR 0013 | `test_DeployScript_RevertsOnCodehashMismatch` (fork only), `test_DeployScript_SucceedsOnMainnetAddresses` (fork only) |
 | H9 | Hook order: refund check before R1 and R2 | ADR 0014 | `test_HookOrder_EscapeTxWithRefundFieldsReverts`, `test_HookOrder_CancellationWithRefundFieldsReverts` |
@@ -170,8 +170,9 @@ A handler mixes signed transactions, module transactions, batches, config change
 
 | ID | Requirement | Tests |
 |---|---|---|
-| F1 | Bybit's Safe version and pre-hack state verified | `test_Fork_BybitSafeVersionAndState` (fork only; open item 1) |
-| F2 | Migrate → install → replay the payload, which reverts | `test_Fork_BybitPayloadReverts` (fork only) |
+| F1 | Bybit's Safe version and pre-hack state at `ForkBlocks.BYBIT_PRE_HACK` (verified manually 2026-10-14: v1.1.1, 3 of 6, nonce 71) | `test_Fork_BybitSafeVersionAndState` (fork only) |
+| F1b | The pre-hack fork has no canonical v1.5.0 code, so the demo deploys its own | `test_Fork_BybitDemoDeploysOwnV150` (fork only) |
+| F2 | Migrate → install → replay the decoded payload (ADR 0013), which reverts | `test_Fork_BybitPayloadReverts` (fork only) |
 | F3 | A legitimate proxy upgrade through the timelock succeeds | `test_Fork_LegitProxyUpgradeViaTimelock` (fork only) |
 
 ## Phase 12: alert bot (Rust)

@@ -40,6 +40,36 @@ test runs against both.
     (`0x14F2982D601c9458F93bd70B218933A6f8165e7b`), pointing at the v1.5.0 `Safe` singleton
     (`0xFf51A5898e281Db6DfC7855790607438dF2ca44b`). Both addresses are from `CHANGELOG.md`, and
     the fork setup must confirm code exists at each.
+- **Two pinned fork blocks** (owner, 2026-10-14; `test/base/ForkBlocks.sol`). Each concrete variant
+  chooses its block through `_forkBlock()`, and shared harness code never hard-codes one.
+
+  | Constant | Block | Used for |
+  |---|---|---|
+  | `ForkBlocks.FEATURE` | 26,191,601 (latest when pinned) | infra and feature fork tests |
+  | `ForkBlocks.BYBIT_PRE_HACK` | 21,895,237 | Phase 11 replay |
+
+  - **Canonical v1.5.0 deployment blocks**, found by bisecting `eth_getCode`:
+
+    | Contract | First block with code |
+    |---|---|
+    | `SafeProxyFactory` | 22,774,977 |
+    | `CompatibilityFallbackHandler` | 22,774,979 |
+    | `MultiSendCallOnly` | 22,774,983 |
+    | `Safe` singleton | 22,838,493 |
+
+    All are **after** the hack (block 21,895,238), so on the pre-hack fork the Phase 11 demo deploys
+    the v1.5.0 contracts itself and does not use the canonical-address `ForkSafe` harness.
+  - **Bybit facts** (read on-chain at block 21,895,237):
+    - Safe `0x1Db92e2EeBC8E0c075a02BeA49a2935BcD2dFCF4`;
+    - singleton `0x34CfAC646f301356fAa8B21e94227e3583Fe3F5F`, with `VERSION()` = "1.1.1";
+    - threshold 3 of 6, nonce 71.
+  - **The hack:** slot 0 changes in block 21,895,238 through tx
+    `0x46deef0f52e3a983b67abf4714448a41dd7ffd6d32d32da69d62081c68ad7882`. That tx is
+    `execTransaction` with:
+    - `to = 0x96221423681A6d52E184D440a8eFCEbB105C7242`, `operation = 1` (DelegateCall);
+    - `data = transfer(0xbdd077f651ebe7f7b3ce16fe5f2b025be2969516, 0)`;
+    - `safeTxGas = 45746`.
+- **Chain check:** the fork variant reverts with `WrongChain` unless `block.chainid == 1`.
 - **CI:** the forge-generated `.github/workflows/test.yml` runs `forge test`. Fork tests need an
   `ETH_RPC_URL` secret. Without one they must be skipped explicitly, not silently pass.
 

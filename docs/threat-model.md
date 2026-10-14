@@ -154,10 +154,9 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
 
 ## 8. Known limitations
 
-- **Demo scope.** Guards do not exist before Safe v1.3.0. The fork migrates the Bybit Safe and
-  replays the same malicious payload, signed by test owners. The claim is "the guard blocks this
-  class of attack", not "this would have saved Bybit". Bybit's Safe version is not yet verified on
-  a fork.
+- **Demo scope.** Guards do not exist before Safe v1.3.0. The Bybit Safe ran v1.1.1 (verified on-chain,
+  ADR 0013). The fork migrates it and replays the same malicious payload, signed by test owners.
+  The claim is "the guard blocks this class of attack", not "this would have saved Bybit".
 - **Off-chain EIP-1271 signatures** other than Permit2 are not controlled
   (`CompatibilityFallbackHandler.sol:78-84`). The restrictive fallback handler is v2.
 - **Cap-rate drain by a trusted module** until detected (§3.3).

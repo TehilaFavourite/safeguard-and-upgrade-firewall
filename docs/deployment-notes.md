@@ -51,7 +51,8 @@ fork before the batch is built. Tokens that revert are revoked with `approve(spe
 
 | Token | Address | Verified on fork (block) |
 |---|---|---|
-| *(filled in by the scan; none verified yet)* | | |
+| BNB | `0xB8c77482e45F1F44dE1745F52C74426C631bDD52` | 26,191,613: `approve(_, 0)` reverts, `approve(_, 1)` returns `true` (eth_call). Identity checked by `name()`/`symbol()` = "BNB" and 18 decimals; cross-check against Etherscan |
+| *(further tokens filled in by the scan)* | | |
 
 ## Notes
 

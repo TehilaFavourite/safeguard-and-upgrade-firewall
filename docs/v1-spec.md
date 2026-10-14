@@ -148,10 +148,14 @@ Guard + factory, install checker, alert bot, Bybit fork demo, runbook.
 ---
 
 ## Open v1 items (decide before writing tests)
-1. **Bybit Safe version.** Verify on a mainnet fork. Blocked: the configured `ETH_RPC_URL` reports
-   chain ID 11155111 (Sepolia), not 1.
-2. **Tokens that revert on `approve(_, 0)`.** Verify BNB and any scanned tokens on a mainnet fork.
-   Blocked for the same reason.
+
+None open.
+
+Resolved 2026-10-14 (fifth round, on-chain verification):
+- Bybit's Safe was v1.1.1 (3 of 6, nonce 71) at the pre-hack block 21,895,237; slot 0 changed in
+  block 21,895,238 (ADR 0013);
+- BNB reverts on `approve(_, 0)` (deployment notes);
+- two pinned fork blocks; the Phase 11 demo deploys v1.5.0 itself (ADR 0013).
 
 Resolved 2026-10-14 (fourth round):
 - the factory is permissionless and idempotent, and escape items bind the new guard's address and
