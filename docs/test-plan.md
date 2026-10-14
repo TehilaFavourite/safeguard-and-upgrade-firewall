@@ -83,16 +83,50 @@ Every test runs in the unit and fork variants unless marked **(fork only)**. Tes
 
 ## Phase 3: MultiSend decoder
 
-| ID | Requirement | Source | Tests |
-|---|---|---|---|
-| D1 | `to == 0` is normalized to the Safe before policy runs | ADR 0003 | `test_Decoder_ZeroToNormalizedToSafe`, `test_Batch_ZeroToSelfCallSubjectToSelfCallPolicy` |
-| D2 | Strict tiling and bounds | ADR 0003 | `test_Decoder_TrailingBytesUpTo32Reverts`, `test_Decoder_TrailingBytesOver32Reverts`, `test_Decoder_DataLengthPastBufferReverts`, `test_Decoder_TruncatedEntryHeaderReverts` |
-| D3 | Operation byte must be 0 | ADR 0003 | `testFuzz_Decoder_NonZeroOperationReverts` (1–255) |
-| D4 | Canonical ABI wrapper | ADR 0003 | `test_Decoder_WrongSelectorReverts`, `test_Decoder_NonCanonicalOffsetReverts`, `test_Decoder_LengthInconsistentWithCalldataReverts` |
-| D5 | Malformed input is never accepted | ADR 0003 | `testFuzz_Decoder_RandomBytesNeverAcceptedUnlessWellFormed` |
-| D6 | Differential: an accepted batch is executed identically by `MultiSendCallOnly` | build plan Phase 3 | `testFuzz_Decoder_DifferentialWithMultiSendCallOnly`. A recording target logs every call `(to, value, data)` and is compared with the decoder's output |
-| D7 | Every inner call runs the full pipeline | ADR 0003 | `test_Batch_OneViolatingInnerCallRevertsBatch`, `test_Batch_InnerDelegatecallImpossible` |
-| D8 | Empty batch rejected | ADR 0003 (P2) | `test_Decoder_EmptyBatchReverts` |
+Principle (ADR 0003): one accepted encoding per batch.
+
+**Decoder alone** (`MultiSendDecoder.t.sol`, pure, no variants):
+
+| ID | Requirement | Tests |
+|---|---|---|
+| I3.1 | Outer selector `multiSend(bytes)` | `test_Decoder_WrongSelectorReverts`, `test_Decoder_ShorterThanSelectorReverts` |
+| I3.2 | Canonical ABI wrapper; padding zero (D3) | `test_Decoder_TruncatedWrapperReverts`, `test_Decoder_NonCanonicalOffsetReverts`, `test_Decoder_ExtraWordAfterBatchReverts`, `test_Decoder_DeclaredLengthPastDataReverts`, `testFuzz_Decoder_NonZeroPaddingReverts` |
+| I3.3 | No empty batch | `test_Decoder_EmptyBatchReverts` |
+| I3.4 | Strict tiling | `testFuzz_Decoder_TrailingBytesReverts` (1-84), `test_Decoder_TrailingBytesBoundaries` (1, 32, 33, 84), `test_Decoder_TruncatedHeaderReverts`, `test_Decoder_DataLengthPastBufferReverts`, `test_Decoder_HugeDataLengthRevertsMalformed`, `test_Decoder_MalformedSecondEntryReportsItsOffset` |
+| I3.5 | Operation byte rejected by the guard (1 explicitly, 2-255 fuzzed) | `test_Decoder_InnerDelegateCallRejectedByGuard`, `testFuzz_Decoder_NonZeroOperationReverts`, `test_Decoder_OperationErrorReportsEntryIndex` |
+| I3.6 | `to == 0` normalized to the Safe | `test_Decoder_ZeroToNormalizedToSafe` |
+| I3.7 | At most 32 inner calls (D1) | `test_Decoder_MaxBatchCallsAccepted`, `test_Decoder_TooManyBatchCallsReverts` |
+| I3.8 | Every rejection is a decoder custom error (never a Panic or out-of-gas) | `testFuzz_Decoder_RandomBytesOnlyKnownErrors`, `testFuzz_Decoder_RandomPayloadOnlyKnownErrors`, `testFuzz_Decoder_RandomEntriesOnlyKnownErrors` |
+| happy path | Entries decoded in order with offsets into `data` | `test_Decoder_DecodesSingleEntry`, `test_Decoder_DecodesMultipleEntriesInOrder` |
+
+**Through the guard** (`BatchPolicy.t.sol`, both variants):
+
+| ID | Requirement | Tests |
+|---|---|---|
+| I3.9 | Inner calls go through the pipeline; inner `to == GUARD` rejected (closes the ADR 0018 batch gap) | `testFuzz_Batch_InnerCallToGuardAnySelectorReverts`, `test_Batch_OneBadEntryRevertsWholeBatch` |
+| I3.10 | **Flip:** inner GUARD hook, Phase 2 `NoActiveExecution(SIGNED, NONE)` (post) → Phase 3 `GuardCallRejected` (pre) | `test_Batch_InnerCallToGuardHookRevertsAtPreCheck`. The `setFallbackHandler` interim test stays post-check-caught until **Phase 5** |
+| I3.11 | Regression: well-formed transfers pass | `test_Batch_WellFormedTransfersPass` |
+| D2 | Outer delegatecall value must be zero | `test_Batch_OuterValueNonZeroReverts` |
+| D4 | No nested batches | `test_Batch_NestedBatchReverts` |
+| I3.5 / I3.3 / I3.4 | Decoder errors surface through the guard | `test_Batch_InnerDelegateCallRejectedByGuardNotMultiSend`, `test_Batch_EmptyBatchRejectedByGuard`, `test_Batch_TrailingBytesRejectedByGuard` |
+| no fast path | A cancellation-shaped inner entry sets no marker, and the post-check runs | `test_Batch_CancellationShapedEntryGetsNoFastPath`, `test_Batch_ZeroToCancellationShapedEntryGetsNoFastPath`, regression `test_Batch_OnlyCancellationShapedEntryPasses`. **Escape-shaped inner entries get the same test in Phase 4** |
+
+**Equivalence** (`BatchDifferential.t.sol`; unit variant against local `MultiSendCallOnly`, fork variant against the canonical 0.7.6 bytecode):
+
+| ID | Requirement | Tests |
+|---|---|---|
+| I3.12 | Every accepted batch executes exactly as decoded | `testFuzz_Differential_WellFormedBatchesExecuteAsDecoded`, `testFuzz_Differential_MutatedBatches` (truncate, extend, alter dataLength) |
+| I3.13 | Why strictness matters: `MultiSendCallOnly` ignores up to 32 trailing bytes and reads past its buffer | `test_Differential_MultiSendIgnoresTrailingBytesDecoderRejects`, `test_Differential_MultiSendReadsPastBufferDecoderRejects` |
+
+**MemoryReader** (`MemoryReader.t.sol`, contingent on approval of the assembly exception): every reader fuzzed against a byte-by-byte reference; exact `MemoryReadOutOfBounds` errors, including offsets near 2^256 and an empty buffer.
+
+**Phase 3 red check** (2026-10-14, Phase 2 code plus compile-only stubs, both variants, `-j 1`): 64 tests.
+- **53 failed** as required. The flip shows exactly `NoActiveExecution(1, 0) != GuardCallRejected(0x93271368)`.
+- **11 passed**, all by design:
+  - the no-fast-path regressions (Phase 2 already sets the marker only at top level);
+  - `OnlyCancellationShapedEntryPasses` and `WellFormedTransfersPass`;
+  - the three "only known errors" fuzzers, which a never-rejecting stub passes trivially. They guard the real decoder against a Panic or out-of-gas.
+- A first run of `WellFormedTransfersPass` failed on the fork only. `makeAddr("alice")` has EIP-7702 delegation code on mainnet that forwards ETH. Fixed with the `_eoa(label)` fixture helper (namespaced label, must have no code).
 
 ## Phase 4: timelock, config, escape path, guardian
 

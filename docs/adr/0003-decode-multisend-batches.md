@@ -40,6 +40,25 @@ the same policy pipeline as a top-level call. Specifically (owner, 2026-10-09):
   plain `MultiSend` is rejected.
 - **Empty batches are rejected** (P2; owner, 2026-10-14).
 
+**Principle (owner, 2026-10-14): one accepted encoding per batch.** Anything two encodings could
+mean differently is rejected, because the gap between what signers see and what executes is the
+attack. Concretely (Phase 3 decisions):
+
+- **D1:** at most `MAX_BATCH_CALLS = 32` inner calls, otherwise `TooManyBatchCalls(32)`.
+- **D2:** the outer delegatecall must have `value == 0`, otherwise `DelegateCallValueNotZero(value)`.
+  `Executor.execute` ignores `value` on a delegatecall (`Executor.sol:32`), so a non-zero value
+  would look meaningful to signers while meaning nothing.
+- **D3:** the ABI padding after the packed transactions must be zero.
+- **D4:** an inner call to `MULTISEND_CALL_ONLY` itself (a nested batch) is rejected with
+  `NestedBatchNotAllowed(index)`.
+- **Operation byte:** any inner operation byte other than 0, including 1, is rejected by the guard
+  itself with `InnerOperationNotAllowed(index, op)`. This doesn't rely on `MultiSendCallOnly`'s own
+  revert (`MultiSendCallOnly.sol:57-58`).
+- **Error set:** every input the decoder rejects reverts with one of its own custom errors, never
+  a Panic or out-of-gas.
+- **No fast paths inside a batch.** A cancellation-shaped (and, from Phase 4, escape-shaped) inner
+  entry gets no fast path. The post-check always runs for a batch.
+
 ## Consequences: why this is harder than it looks
 
 The guard's parser must accept **only** batches that it and `MultiSendCallOnly` interpret
