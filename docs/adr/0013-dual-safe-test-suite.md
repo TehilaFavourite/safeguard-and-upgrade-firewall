@@ -86,8 +86,15 @@ test runs against both.
 
   Fuzz depth comes from the unit variant. The fork variant's job is to confirm the same behaviour
   against production bytecode.
-- **CI:** the forge-generated `.github/workflows/test.yml` runs `forge test`. Fork tests need an
-  `ETH_RPC_URL` secret. Without one they must be skipped explicitly, not silently pass.
+- **CI: two jobs** (owner, 2026-10-14):
+
+  | Job | Command | When | Secrets |
+  |---|---|---|---|
+  | Unit | `forge test --no-match-contract 'ForkTest\|ForkInfra'`, parallel | every push | none |
+  | Fork | `forge test -j 1 --match-contract 'ForkTest\|ForkInfra'`, with `ETH_RPC_URL` | PRs to `main`, and nightly | `ETH_RPC_URL` |
+
+  Without the secret, fork tests skip visibly (`vm.skip`) and never silently pass. Locally, use
+  `forge test -j 1` whenever the fork variant runs.
 
 ## Pinned addresses (owner, 2026-10-14)
 
