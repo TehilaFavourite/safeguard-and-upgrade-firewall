@@ -73,6 +73,37 @@ singleton can return the original values and pass a naive comparison.
    - The post-check compares `masterCopy()` against the expected singleton. No separate snapshot
      is needed.
 
+7. **The guard only reads the Safe, through STATICCALL** (verified 2026-10-14).
+   - **The concern:** `_exit` clears the path *before* `_compareProtectedState` makes external calls
+     to the Safe, and in the attack case those calls could reach attacker code.
+   - **Every read compiles to STATICCALL.** All five reads are declared `view`:
+     `ISafeProxyMasterCopy.masterCopy` (`src/libraries/SafeSlots.sol`), and in the Safe interfaces
+     `IStorageAccessible.getStorageAt` (`:15`), `IModuleManager.getModulesPaginated` (`:81`),
+     `IOwnerManager.getThreshold` (`:50`) and `IOwnerManager.getOwners` (`:62`).
+   - **Bytecode evidence:** the runtime code (8,039 bytes) contains **5 STATICCALL and no CALL,
+     DELEGATECALL or CALLCODE** before the metadata at offset `0x1f32`. One `0xff` byte at
+     `0x1f3d` disassembles as SELFDESTRUCT but lies inside the CBOR metadata hash, so it is data.
+     `script/check-guard-opcodes.sh` enforces this in CI.
+   - **Trace evidence:** every guard read appears as `SafeProxy::fallback() [staticcall]`.
+   - **Consequences:**
+     1. **In production, attacker getters never run inside the hooks.** Step 8 and the post-check
+        compare the singleton first, through the proxy's own `masterCopy()`, and revert before any
+        getter is called. Test: `test_PostCheck_AttackerGetterNeverCalled` (exactly one
+        `getOwners()` call, the pre-check's honest read).
+     2. **Even if one did run, it couldn't change state.** In a static context, any storage write
+        fails. That includes re-entering `execTransaction`, whose `nonce++` is a write. Tests (on a
+        test-only guard that skips the singleton check):
+        - `test_StaticRead_ReentryFromAttackerGetterFails`: delegatecall re-entry into the original
+          singleton's `execTransaction`;
+        - `test_StaticRead_GetterStorageWriteFails`: a direct `sstore`;
+        - plus a control showing the re-entry calldata is valid outside a static context.
+     3. **Mutation-tested.** Replacing the owner read with a non-static CALL makes both static tests
+        fail. The re-entry case then fails with `UnexpectedSingleton` instead: the inner
+        `execTransaction` reaches step 8, which is an independent second layer. Reordering the
+        post-check to read owners before the singleton makes `AttackerGetterNeverCalled` fail.
+   - Clearing the path before the comparison is therefore safe. The comparison can't re-enter in
+     any way that changes state.
+
 ## Consequences
 
 - **Gas:** every guarded execution reads the owner and module lists twice, once in the pre-check
