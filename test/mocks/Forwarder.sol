@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
 /// @notice Calls `target` with `data` and bubbles any revert unchanged. Used to re-enter the Safe

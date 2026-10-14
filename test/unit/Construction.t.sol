@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
@@ -51,11 +51,12 @@ abstract contract ConstructionTest is FirewallTestBase {
 
     // ---------------------------------------------------------------- I1.5 factory
 
-    function testFuzz_Factory_DeployRevertsUnlessCallerIsSafe(address caller) public {
-        vm.assume(caller != address(safe));
-        vm.expectRevert(abi.encodeWithSelector(IGuardFactory.NotSafe.selector, caller, address(safe)));
+    function testFuzz_Factory_AnyoneCanDeploy(address caller) public {
+        ISafeFirewallGuard.FirewallConfig memory cfg = _config();
         vm.prank(caller);
-        factory.deploy(_config());
+        address deployed = factory.deploy(cfg);
+        assertEq(deployed, factory.predict(cfg));
+        assertGt(deployed.code.length, 0);
     }
 
     /// @dev The expected address is computed here independently of `predict`, from
@@ -68,7 +69,6 @@ abstract contract ConstructionTest is FirewallTestBase {
         address expected = vm.computeCreate2Address(salt, initCodeHash, address(factory));
 
         assertEq(factory.predict(cfg), expected, "predict");
-        vm.prank(address(safe));
         assertEq(factory.deploy(cfg), expected, "deploy");
         assertGt(expected.code.length, 0, "no code at predicted address");
     }
@@ -82,7 +82,6 @@ abstract contract ConstructionTest is FirewallTestBase {
     }
 
     function test_Factory_GuardBoundToSafe() public {
-        vm.prank(address(safe));
         address deployed = factory.deploy(_config());
         assertEq(ISafeFirewallGuard(deployed).SAFE(), address(safe));
     }
@@ -92,7 +91,6 @@ abstract contract ConstructionTest is FirewallTestBase {
         address expected = factory.predict(cfg);
         vm.expectEmit(true, true, true, true, address(factory));
         emit IGuardFactory.GuardDeployed(address(safe), expected, keccak256(abi.encode(cfg)));
-        vm.prank(address(safe));
         factory.deploy(cfg);
     }
 
@@ -106,14 +104,36 @@ abstract contract ConstructionTest is FirewallTestBase {
         assertGt(expected.code.length, 0);
     }
 
-    /// @dev No "one per Safe" rule (ADR 0007). The same config twice collides at the CREATE2 address.
-    function test_Factory_SameConfigTwiceReverts() public {
+    /// @dev Idempotent (ADR 0007): deploying the same config again returns the existing guard
+    ///      instead of reverting.
+    function test_Factory_DeployTwiceReturnsSameAddress() public {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
-        vm.startPrank(address(safe));
+        address first = factory.deploy(cfg);
+        address second = factory.deploy(cfg);
+        assertEq(second, first);
+    }
+
+    /// @dev No state change on the second call, so no event (engineering standard: an event per
+    ///      state change).
+    function test_Factory_SecondDeployEmitsNothing() public {
+        ISafeFirewallGuard.FirewallConfig memory cfg = _config();
         factory.deploy(cfg);
-        vm.expectRevert();
+        vm.recordLogs();
         factory.deploy(cfg);
-        vm.stopPrank();
+        assertEq(vm.getRecordedLogs().length, 0);
+    }
+
+    /// @dev A third party front-runs with the identical config. The Safe's own deploy, the first
+    ///      step of the install batch, must still succeed and return the same guard. Phase 9 repeats
+    ///      this against the full batch.
+    function test_Factory_ThirdPartyPreDeployDoesNotBreakSafeDeploy() public {
+        ISafeFirewallGuard.FirewallConfig memory cfg = _config();
+        vm.prank(makeAddr("frontRunner"));
+        address preDeployed = factory.deploy(cfg);
+
+        assertTrue(_execSigned(address(factory), 0, abi.encodeCall(GuardFactory.deploy, (cfg)), Enum.Operation.Call));
+        assertEq(factory.predict(cfg), preDeployed);
+        assertEq(ISafeFirewallGuard(preDeployed).SAFE(), address(safe));
     }
 }
 

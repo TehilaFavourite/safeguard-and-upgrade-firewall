@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
 import {FirewallTestBase} from "./FirewallTestBase.sol";
@@ -18,7 +18,10 @@ abstract contract ForkSafe is FirewallTestBase {
     // the fork setup checks that code exists here.
     address internal constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
+    uint256 internal constant MAINNET_CHAIN_ID = 1;
+
     error MissingCode(string name, address at);
+    error WrongChain(uint256 chainId);
 
     function _deploySafe() internal override returns (SafeInfra memory i) {
         string memory rpc = vm.envOr("ETH_RPC_URL", string(""));
@@ -26,7 +29,9 @@ abstract contract ForkSafe is FirewallTestBase {
             vm.skip(true, "fork variant skipped: ETH_RPC_URL unset or FORK_BLOCK not pinned");
             return i;
         }
-        vm.createSelectFork(rpc, FORK_BLOCK);
+        // "mainnet" is the [rpc_endpoints] alias in foundry.toml, which reads ETH_RPC_URL from .env.
+        vm.createSelectFork("mainnet", FORK_BLOCK);
+        if (block.chainid != MAINNET_CHAIN_ID) revert WrongChain(block.chainid);
 
         _requireCode("Safe singleton", SAFE_SINGLETON);
         _requireCode("SafeProxyFactory", SAFE_PROXY_FACTORY);
