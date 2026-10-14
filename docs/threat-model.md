@@ -149,6 +149,7 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
 | Nested execution vs. caps | Transient-storage reentrancy flag shared by all four hooks (ADR 0005) |
 | Gas refunds as an outflow | Banned (ADR 0010) |
 | Direct writes to guard slots via delegatecall | Post-check on the cached guard (ADR 0001) |
+| Replaced singleton lies through the Safe's getters | Singleton read first via the proxy's `masterCopy()` (ADR 0020) |
 | Anyone calls the hooks directly | Hooks revert unless `msg.sender == safe` (ADR 0007) |
 | Threshold raise freezes the Safe | Owner and threshold changes timelocked (ADR 0016) |
 
@@ -161,6 +162,10 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
   (`CompatibilityFallbackHandler.sol:78-84`). The restrictive fallback handler is v2.
 - **Cap-rate drain by a trusted module** until detected (§3.3).
 - **Allowlisted routes with free parameters** leak up to the caps (§3.1).
+- **Module list bound.** Every guarded execution reverts with `TooManyModules` on a Safe with more
+  than 16 modules. The state is prevented at install and when queueing `enableModule`. Escape (R1)
+  and cancellation (R2) return before the module read, so even a Safe over the limit can't be
+  permanently frozen (ADR 0020).
 
 ## 9. Open questions
 

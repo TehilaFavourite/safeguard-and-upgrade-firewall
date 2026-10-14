@@ -45,18 +45,39 @@ This plan maps every requirement in `docs/v1-spec.md` and every mitigation in
 
 ## Phase 2: Bybit stopper
 
+Every test runs in the unit and fork variants unless marked **(fork only)**. Test-only seam guards
+(`test/harness/SeamGuards.sol`, ADR 0020 D1) isolate the pre-check and the post-check.
+
 | ID | Requirement | Source | Tests |
 |---|---|---|---|
-| B1 | Signed-path delegatecall only to the pinned `MultiSendCallOnly` | spec pipeline 2; ADR 0003 | `test_Delegatecall_PinnedMultiSendCallOnlyAllowed`, `test_Delegatecall_ArbitraryTargetReverts`, `test_Delegatecall_PlainMultiSendReverts`, `testFuzz_Delegatecall_AnyOtherTargetReverts` |
-| B2 | Module path never delegatecalls | spec pipeline 2; threat model §3.3 | `test_ModulePath_DelegatecallToMultiSendCallOnlyReverts`, `testFuzz_ModulePath_AnyDelegatecallReverts` |
-| B3 | Refund fields must be zero on every signed transaction | ADR 0010 | `test_Refunds_GasPriceNonZeroReverts`, `test_Refunds_GasTokenNonZeroReverts`, `test_Refunds_RefundReceiverNonZeroReverts`, `testFuzz_Refunds_AnyNonZeroFieldReverts` |
-| B4 | R2: the exact cancellation always passes | threat model R2 | `test_Cancellation_PassesUnderHostileConfig` (all caps 0, empty allowlist), `test_Cancellation_ConsumesNonceAndKillsBlockedTx` |
-| B5 | R2 matches the exact shape only | threat model R2 | `test_Cancellation_WithValueGoesThroughPipeline`, `test_Cancellation_WithDataGoesThroughPipeline`, `test_Cancellation_DelegatecallGoesThroughPipeline` |
-| B6 | The pre-check alone stops the Bybit payload | build plan Phase 2 | `test_Bybit_PreCheckAloneBlocksPayload`. The harness disables the post-check comparison through a test-only subclass |
-| B7 | The post-check alone stops the Bybit payload | build plan Phase 2; ADR 0001 | `test_Bybit_PostCheckAloneBlocksPayload`. The harness allowlists the malicious target as a delegatecall target, so only the slot compare can stop it |
-| B8 | Snapshot and compare every protected slot | spec Post-check | `test_PostCheck_SingletonChangeReverts`, `test_PostCheck_GuardSlotChangeReverts`, `test_PostCheck_ModuleGuardSlotChangeReverts`, `test_PostCheck_FallbackHandlerChangeReverts`, `test_PostCheck_ModuleListChangeReverts`, `test_PostCheck_OwnersChangeReverts`, `test_PostCheck_ThresholdChangeReverts`, `testFuzz_PostCheck_AnyProtectedSlotWriteReverts` |
-| B9 | Slot constants match the Safe source | engineering standard | `test_SafeSlots_ConstantsMatchSafeSource`. Each constant is compared with `getStorageAt` on a Safe after a known setter call |
-| B10 | Module-path post-check uses the cached module guard | ADR 0001 | `test_ModulePath_PostCheckCatchesModuleGuardSlotOverwrite` |
+| I2.1 | Refund fields zero on every signed transaction | ADR 0010 | `test_Refunds_GasPriceNonZeroReverts`, `test_Refunds_GasTokenNonZeroReverts`, `test_Refunds_RefundReceiverNonZeroReverts`, `testFuzz_Refunds_AnyNonZeroFieldReverts` |
+| I2.2 | Refund check (step 4) runs before R2 and before step 7 | ADR 0014 | `test_HookOrder_GuardCallWithRefundRevertsWithRefundError`, `test_HookOrder_CancellationShapedWithRefundRevertsWithRefundError` |
+| I2.3 | `baseGas` and `safeTxGas` unrestricted (regression) | ADR 0010 | `test_Refunds_BaseGasAndSafeTxGasAllowed` |
+| I2.4 | Exact cancellation passes, uses up the nonce, kills a blocked signed transaction; its marker doesn't leak | threat model R2; ADR 0020 D2 | `test_Cancellation_PassesAndConsumesNonce`, `test_Cancellation_KillsBlockedSignedTx`, `test_Cancellation_MarkerDoesNotLeakToNextExecution` |
+| I2.5 | R2 doesn't depend on policy | threat model R2 | `test_Cancellation_PassesWhenPolicyAlwaysReverts`, plus sanity check `test_HostileGuard_BlocksOrdinaryCall` |
+| I2.6 | Exact-shape tests for R2 | deferred to Phase 6 | (none until the allowlist can tell a near-cancellation from a pass) |
+| I2.7 | Signed `DelegateCall` only to `MULTISEND_CALL_ONLY` | ADR 0003 | `testFuzz_Delegatecall_SignedNonAllowlistedTargetReverts`, `test_Delegatecall_SignedToSafeItselfReverts` |
+| I2.8 | `MULTISEND_CALL_ONLY` passes the pre-check (interim, regression) | ADR 0003; build plan warning | `test_Delegatecall_SignedToMultiSendCallOnlyPasses`, `test_Delegatecall_InterimBatchInnerCallCaughtOnlyByPostCheck` |
+| I2.9 | Plain `MultiSend` rejected | ADR 0003 | `test_Delegatecall_SignedPlainMultiSendReverts` |
+| I2.10 | Module path never delegatecalls | threat model §3.3 | `testFuzz_Delegatecall_ModuleAnyTargetReverts`, `test_Delegatecall_ModuleToMultiSendCallOnlyReverts` |
+| I2.11 | `Call` unaffected (regression) | spec pipeline 2 | `test_Delegatecall_SignedCallUnaffected`, `test_Delegatecall_ModuleCallUnaffected` |
+| I2.12 / I2.15 | Every protected field change is caught: valid setters, and raw scalar writes with exact values | spec Post-check; ADR 0020 | `test_PostCheck_{Guard,ModuleGuard}SlotChangeReverts`, `test_PostCheck_FallbackHandlerChangeReverts`, `test_PostCheck_ModuleListChangeReverts`, `test_PostCheck_OwnersChangeReverts`, `test_PostCheck_ThresholdChangeReverts`, `testFuzz_PostCheck_RawScalarSlotWriteReverts`, `test_PostCheck_NoProtectedChangePasses` (regression) |
+| I2.12b | Corrupted linked lists fail closed | ADR 0020 | `test_PostCheck_CorruptedOwnerListFailsClosed` |
+| I2.13 | **Singleton read via `masterCopy()` first; a lying singleton is caught** | ADR 0020 | Control (passes on any code): `test_LyingSingleton_GettersReturnOriginalsOnlyMasterCopyDiffers`. Property: `test_PostCheck_LyingSingletonCaughtViaMasterCopy` |
+| I2.14 | Comparison runs when `success == false`, on both paths | spec Post-check | `test_PostCheck_RunsWhenSignedInnerCallFails`, `test_PostCheck_RunsWhenModuleInnerCallFails` |
+| I2.16 | Module path compared too | ADR 0001 | `test_PostCheck_ModulePathFallbackHandlerChangeReverts` |
+| I2.17 | Slot constants match the Safe source and the live layout | engineering standard | `test_SafeSlots_ConstantsMatchSafeSource` |
+| I2.18 | `MAX_MODULES = 16`; R2 still passes over the limit | ADR 0020 D3 | `test_ModuleLimit_AtMaxPasses`, `test_ModuleLimit_OverMaxSignedReverts`, `test_ModuleLimit_OverMaxModulePathReverts`, `test_ModuleLimit_CancellationStillPassesOverMax` |
+| I2.19 | Pre-check alone stops the Bybit payload | build plan Phase 2 | `test_Bybit_PreCheckAloneBlocksPayload` (delegate never reached: `expectCall` count 0, which counts delegatecalls) |
+| I2.20 | Post-check alone stops the Bybit payload | build plan Phase 2 | `test_Bybit_PostCheckAloneBlocksPayload` (delegate reached: `expectCall` count 1) |
+| I2.21 | Full guard stops it at the pre-check | build plan Phase 2 | `test_Bybit_FullGuardBlocksPayloadAtPreCheck` |
+| I2.21b | Unit mock matches the real attacker contract | fixture fidelity | `test_Bybit_MockMatchesRealAttackerContract` (fork only) |
+| I2.22 | Module transaction hash | **rejected** (ADR 0019) | none |
+| D1 | No `src/` override of the seams | ADR 0020 | `script/check-seam-overrides.sh` (CI) |
+
+**Phase 2 red check** (2026-10-14, Phase 1 code plus empty seams, both variants, `-j 1`): 87 tests, **66 failed** as required.
+- 21 passed, all expected. These are the liveness and regression tests I2.3, I2.8, I2.11, `PassesAndConsumesNonce`, `NoProtectedChangePasses`, `AtMaxPasses`, `CancellationStillPassesOverMax` and `PassesWhenPolicyAlwaysReverts` (its paired sanity test fails). The constants test passes too.
+- Two guard-independent tests also passed: the fidelity test and the lying-singleton control.
 
 ## Phase 3: MultiSend decoder
 

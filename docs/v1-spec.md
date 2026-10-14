@@ -76,7 +76,11 @@ above that) (ADR 0005).
 
 ## Post-check
 - Invariants unchanged unless a matured item authorized the change: singleton, guard, module guard,
-  fallback handler, module list, owners, threshold. Read through `getStorageAt`.
+  fallback handler, module list, owners, threshold.
+- **Read order (ADR 0020):** the singleton is read via the proxy's `masterCopy()` and compared
+  first. The other fields are read through the Safe's getters only after that.
+- **Module list:** at most `MAX_MODULES = 16`; above that, `TooManyModules`.
+- **R2 cancellation:** skips the comparison.
 - **Outflow:** if `success == true`, check the per-token totals (passed from the pre-check through
   transient storage) against the bucket level, then debit. Revert if a total exceeds the level
   (ADR 0005, 0012).

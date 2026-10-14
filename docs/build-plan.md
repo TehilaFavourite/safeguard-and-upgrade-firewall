@@ -82,6 +82,8 @@ bot/                           alert bot (Phase 12)
   - Refund ban, R2 cancellation, protected-slot snapshot and compare.
   - Separate tests proving that the pre-check alone **and** the post-check alone each stop a
     Bybit-shaped payload.
+  - ⚠️ **Do not deploy or tag a release between Phase 2 and Phase 3.** Batch inner calls are only
+    post-checked until the decoder lands.
 - **3. MultiSend decoder.**
   - Strict parsing; `to == 0` normalized to the Safe; plain `MultiSend` rejected.
   - Fuzzing with malformed batches.
@@ -135,6 +137,9 @@ bot/                           alert bot (Phase 12)
 - **13. Finish.**
   - README: problem, Bybit walkthrough, architecture diagram, design principles, threat-model
     summary, known limitations, how to run the tests and the demo, gas report.
-  - CI workflow: fmt, build, test, coverage and Slither, with fork tests gated on the RPC secret
-    and run with `forge test -j 1` (ADR 0013).
+  - CI workflow, two jobs (ADR 0013):
+    - **unit:** fmt, build, the unit-variant tests (parallel), coverage, `forge snapshot --check`
+      and Slither, on every push, with no secrets;
+    - **fork:** `forge test -j 1` on the fork variant, with the `ETH_RPC_URL` secret, on PRs to
+      `main` and nightly.
   - A final pass checking that every ADR matches the code.

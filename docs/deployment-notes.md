@@ -31,6 +31,8 @@ Migrating after the guard is installed would therefore be blocked, so the order 
 
    If any step reverts, the whole batch reverts. The Safe is never left half-installed.
 
+   The checker also rejects Safes with more than `MAX_MODULES = 16` modules (ADR 0020).
+
    Open points for the checker (decide before implementing):
    - Read the full list via `getModulesPaginated(SENTINEL, n)`. Require `next == SENTINEL` so a
      longer list can't hide behind a page limit.
