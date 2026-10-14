@@ -52,8 +52,10 @@ Everything else goes through the normal pipeline.
 7. **reject every other call to `GUARD`** (ADR 0018). This comes *after* R1, because escape calls
    (`queueEscape`, `cancelEscape`) are themselves calls to `GUARD`, and R1 must run before any
    policy code;
-8. slot snapshot;
-9. policy pipeline.
+8. **expected singleton**: `masterCopy() == expectedSingleton` (ADR 0020, I2.23). This comes after
+   R1 and R2, so escape and cancellation work on an already-compromised Safe;
+9. protected-state snapshot;
+10. policy pipeline.
 
 **Module path:** escape-path calls and **all** config calls are **rejected**, not fast-returned
 (ADR 0007, ADR 0008).

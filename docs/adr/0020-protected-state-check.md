@@ -31,7 +31,10 @@ singleton can return the original values and pass a naive comparison.
    after the singleton is confirmed unchanged, because only then does the code answering those
    getters belong to the singleton we trust.
 2. **Encoding.**
-   - Address fields are compared as `bytes32(uint256(uint160(a)))`.
+   - The singleton is compared as `bytes32(uint256(uint160(a)))`, read from `masterCopy()`.
+   - Slot-backed fields (guard, module guard, fallback handler) are compared as the raw 32-byte
+     slot word. For a clean address that equals the same encoding, and it is stricter: any change
+     to the slot is caught.
    - The module list and owner list are compared as `keccak256(abi.encode(list))`.
    - The threshold is compared as `bytes32(threshold)`.
    - A difference reverts with `ProtectedStateChanged(field, beforeValue, afterValue)`.
@@ -40,9 +43,13 @@ singleton can return the original values and pass a naive comparison.
    execution. The cancellation reaches only the Safe's `receive()`, so nothing protected can
    change, and skipping keeps R2 independent of any bug in the comparison code.
 4. **Module list bound** (D3): `MAX_MODULES = 16`.
-   - The list is read with `getModulesPaginated(SENTINEL_MODULES, MAX_MODULES)`, and `next` must
-     equal `SENTINEL_MODULES` (`ModuleManager.sol:62, 203`). Otherwise the check reverts with
-     `TooManyModules`.
+   - The list is read with `getModulesPaginated(SENTINEL_MODULES, MAX_MODULES + 1)`, which bounds
+     the Safe's loop at 17 iterations (`ModuleManager.sol:212`).
+   - 17 entries returned: over the limit, **or a cycle**. This reverts with `TooManyModules(16)`.
+     The read is bounded, so a cycle cannot run out of gas.
+   - Fewer entries but `next != SENTINEL_MODULES`: the list ended at `address(0)` without reaching
+     the sentinel (`ModuleManager.sol:226-227`). This reverts with
+     `ModuleListNotTerminated(next)`.
    - **The state is prevented, not only detected:**
      - the install checker rejects Safes with more than 16 modules (Phase 9);
      - queueing an `enableModule` that would exceed 16 is rejected (Phase 5).
@@ -54,11 +61,33 @@ singleton can return the original values and pass a naive comparison.
    - **Nothing in `src/` may override them.** `script/check-seam-overrides.sh` fails if anything
      does, or if either seam isn't defined exactly once. It runs in CI.
 
+6. **Expected singleton** (I2.23; owner, 2026-10-14).
+   - The guard records an expected singleton: a constructor argument, checked during install
+     (Phase 9), and updated only when an ADR 0015 migration item executes (Phase 8).
+   - Every pre-hook requires `masterCopy() == expectedSingleton`, or reverts with
+     `UnexpectedSingleton(actual, expected)`.
+   - **Placement:** after step 7 and before the snapshot. Escape (R1) and cancellation (R2) return
+     earlier, so they still work on an already-compromised Safe.
+   - **Reason:** the comparison only catches changes made *during* a transaction. This check
+     catches a Safe that was *already* wrong.
+   - The post-check compares `masterCopy()` against the expected singleton. No separate snapshot
+     is needed.
+
 ## Consequences
 
 - **Gas:** every guarded execution reads the owner and module lists twice, once in the pre-check
   and once in the post-check. The cost is measured in the Phase 2 report.
-- **Corrupted lists fail closed.** A delegatecall that corrupts the owner or module linked list
-  (rather than editing it validly) can make the getters revert during the post-check. The
-  transaction then reverts with that error instead of `ProtectedStateChanged`. It is still
-  blocked.
+- **Corrupted lists fail closed, with pinned errors** (owner, 2026-10-14):
+
+  | Corruption | Result |
+  |---|---|
+  | Module list cycle | `TooManyModules(16)`, from the bounded read |
+  | Module list not terminated by the sentinel | `ModuleListNotTerminated(next)` |
+  | Owner list not terminated | The Safe's own `getOwners()` reverts. It has no bound and writes past its array (`OwnerManager.sol:135-144`). The revert data **differs by variant, deterministically** |
+
+  The owner-list revert data, by variant:
+  - **Local build (solc 0.8.28):** `Panic(0x32)`, array index out of bounds.
+  - **Mainnet singleton (solc 0.7.6):** the `invalid` opcode, with **empty** revert data. It also
+    consumes the gas forwarded to that call.
+
+  Each case has a paired control test: the same transaction writing the current value succeeds.

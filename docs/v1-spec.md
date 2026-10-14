@@ -25,8 +25,9 @@ default.
 5. R1 escape;
 6. R2 cancellation;
 7. reject other calls to `GUARD` (ADR 0018);
-8. slot snapshot;
-9. policy pipeline.
+8. expected singleton (ADR 0020);
+9. protected-state snapshot;
+10. policy pipeline.
 
 **Post-hook order:**
 1. R1 fast return (driven by a transient marker);

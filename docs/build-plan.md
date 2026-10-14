@@ -47,8 +47,9 @@ bot/                           alert bot (Phase 12)
 6. **R2:** the exact cancellation transaction always passes;
 7. reject every other call to `GUARD` (ADR 0018). This comes after R1, because escape calls are
    calls to `GUARD`;
-8. snapshot the protected slots into transient storage;
-9. run the policy pipeline on the call, or on every inner call of a strictly decoded
+8. require `masterCopy() == expectedSingleton` (ADR 0020);
+9. snapshot the protected slots into transient storage;
+10. run the policy pipeline on the call, or on every inner call of a strictly decoded
    `MultiSendCallOnly` batch, accumulating per-token outflow in the transient token map.
 
 **Post-hooks**, in this order:
