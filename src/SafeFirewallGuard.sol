@@ -45,8 +45,9 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
 
     /// @notice Pre-check for `Safe.execTransaction`, called after signature verification
     ///         (lib/safe-smart-account/contracts/Safe.sol:147-152).
-    /// @dev Order follows ADR 0014: caller check → reentrancy → path → (refund fields: Phase 2) →
-    ///      (R1 escape: Phase 4) → (R2 cancellation: Phase 2) → (slot snapshot: Phase 2) → policy.
+    /// @dev Order follows ADR 0014: (1) caller check → (2) reentrancy → (3) path → (4) refund
+    ///      fields → (5) R1 escape → (6) R2 cancellation → (7) reject other calls to GUARD →
+    ///      (8) slot snapshot → (9) policy pipeline. Phase 1 implements steps 1-3 and 7.
     function checkTransaction(
         address to,
         uint256,
@@ -60,8 +61,14 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
         bytes memory,
         address
     ) external override {
-        _enter(ExecutionPath.SIGNED);
-        _rejectCallToGuard(to, data);
+        _enter(ExecutionPath.SIGNED); // steps 1-3
+        // Steps 4-6 go here, before step 7 (ADR 0014):
+        //   4. refund fields zero (Phase 2, ADR 0010);
+        //   5. R1 escape: queueEscape / cancelEscape / matched setModuleGuard / setGuard (Phase 4).
+        //      Escape calls are calls to GUARD, so they must be matched before step 7;
+        //   6. R2 cancellation (Phase 2).
+        _rejectCallToGuard(to, data); // step 7 (ADR 0018)
+        // Steps 8-9, slot snapshot and policy pipeline, follow here (Phase 2 onwards).
     }
 
     /// @notice Post-check for `Safe.execTransaction`, called on the guard address cached before
@@ -85,8 +92,11 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
         override
         returns (bytes32)
     {
-        _enter(ExecutionPath.MODULE);
-        _rejectCallToGuard(to, data);
+        _enter(ExecutionPath.MODULE); // steps 1-3
+        // No step 4 on the module path (no refunds, ADR 0010). Escape and config calls are rejected,
+        // not fast-returned, on this path (ADR 0014), so step 7 covers them; step 6 doesn't apply.
+        _rejectCallToGuard(to, data); // step 7 (ADR 0018)
+        // Steps 8-9, slot snapshot and policy pipeline, follow here (Phase 2 onwards).
         return NO_MODULE_TX_HASH;
     }
 

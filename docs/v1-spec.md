@@ -17,15 +17,16 @@ default.
 | Cancellation (Call to the Safe itself, value 0, empty data, no refund fields) always passes | pre-check (R2) |
 | Config calls on the module path are rejected | module pre-check (ADR 0014) |
 
-**Pre-hook order:**
+**Pre-hook order** (ADR 0014):
 1. caller check;
 2. reentrancy;
 3. path flag;
 4. refund fields zero;
 5. R1 escape;
 6. R2 cancellation;
-7. slot snapshot;
-8. policy pipeline.
+7. reject other calls to `GUARD` (ADR 0018);
+8. slot snapshot;
+9. policy pipeline.
 
 **Post-hook order:**
 1. R1 fast return (driven by a transient marker);

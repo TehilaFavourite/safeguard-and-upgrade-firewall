@@ -40,7 +40,7 @@ It must also be one of these two forms:
 
 Everything else goes through the normal pipeline.
 
-**Hook order** (pre-hooks):
+**Hook order** (pre-hooks; amended 2026-10-14):
 
 1. caller check (`msg.sender == SAFE`);
 2. reentrancy flag;
@@ -49,8 +49,11 @@ Everything else goes through the normal pipeline.
    cannot carry a refund drain);
 5. R1 escape;
 6. R2 cancellation;
-7. slot snapshot;
-8. policy pipeline.
+7. **reject every other call to `GUARD`** (ADR 0018). This comes *after* R1, because escape calls
+   (`queueEscape`, `cancelEscape`) are themselves calls to `GUARD`, and R1 must run before any
+   policy code;
+8. slot snapshot;
+9. policy pipeline.
 
 **Module path:** escape-path calls and **all** config calls are **rejected**, not fast-returned
 (ADR 0007, ADR 0008).
