@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.8.28;
 
+import {ISafe} from "safe-smart-account/contracts/interfaces/ISafe.sol";
 import {IFallbackManager} from "safe-smart-account/contracts/interfaces/IFallbackManager.sol";
 import {IGuardManager} from "safe-smart-account/contracts/interfaces/IGuardManager.sol";
 import {IModuleManager} from "safe-smart-account/contracts/interfaces/IModuleManager.sol";
@@ -13,8 +14,16 @@ import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
 import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 import {SafeFirewallGuardHarness} from "../harness/SafeFirewallGuardHarness.sol";
-import {PostCheckOnlyGuard, CompareSpyGuard} from "../harness/SeamGuards.sol";
-import {BybitStyleDelegate, SlotWriter, LyingSingleton, OriginalsStore} from "../mocks/StateMutators.sol";
+import {PostCheckOnlyGuard, CompareSpyGuard, UnsafeOrderGuard} from "../harness/SeamGuards.sol";
+import {
+    BybitStyleDelegate,
+    SlotWriter,
+    LyingSingleton,
+    OriginalsStore,
+    ReentrantOriginalsStore,
+    ReentrantLyingSingleton,
+    StateWritingLyingSingleton
+} from "../mocks/StateMutators.sol";
 import {Reverter} from "../mocks/Reverter.sol";
 import {BybitPayload} from "../fixtures/BybitPayload.sol";
 
@@ -282,8 +291,28 @@ abstract contract ProtectedStatePostOnlyTest is ProtectedStateBase {
     function test_PostCheck_OwnerListUnterminatedReverts() public {
         address[] memory list = safe.getOwners();
         (bytes memory data, bytes memory sigs) = _signedWriterTx(_ownerEntry(list[list.length - 1]), bytes32(0));
-        vm.expectRevert(_unterminatedOwnersRevertData());
-        _execWriter(data, sigs);
+        // Compared explicitly: the fork variant expects EMPTY revert data, which `vm.expectRevert`
+        // can't check reliably in forge 1.5.1 (see `_execTxExpectEmptyRevert`).
+        (bool ok, bytes memory ret) = address(safe)
+            .call(
+                abi.encodeCall(
+                    ISafe.execTransaction,
+                    (
+                        address(writer),
+                        0,
+                        data,
+                        Enum.Operation.DelegateCall,
+                        0,
+                        0,
+                        0,
+                        address(0),
+                        payable(address(0)),
+                        sigs
+                    )
+                )
+            );
+        assertFalse(ok, "corrupted owner list did not revert");
+        assertEq(ret, _unterminatedOwnersRevertData(), "unexpected revert data");
     }
 
     /// @dev Control: same slot, current value (SENTINEL_OWNERS = address(0x1), OwnerManager.sol:17).
@@ -339,6 +368,114 @@ abstract contract ProtectedStatePostOnlyTest is ProtectedStateBase {
             _changed(ISafeFirewallGuard.ProtectedField.SINGLETON, _b32(infra.singleton), _b32(address(liar)))
         );
         assertEq(_masterCopy(), infra.singleton, "slot 0 must be restored by the revert");
+    }
+}
+
+/// @dev Shared builder for the re-entry tests (ADR 0020, decision 7).
+abstract contract ReentrantSingletonBase is ProtectedStateBase {
+    address internal recipient;
+
+    function setUp() public virtual override {
+        super.setUp();
+        recipient = makeAddr("recipient");
+    }
+
+    /// @dev A lying singleton whose getOwners() delegatecalls the ORIGINAL singleton with a validly
+    ///      signed execTransaction (1 wei to `recipient`), signed for `reentryNonce`.
+    function _reentrantLiar(uint256 reentryNonce) internal returns (ReentrantLyingSingleton) {
+        uint256[] memory slots = new uint256[](0);
+        bytes32[] memory values = new bytes32[](0);
+        bytes memory reentry = _signedExecCalldata(recipient, 1 wei, "", Enum.Operation.Call, 0, reentryNonce);
+        return new ReentrantLyingSingleton(
+            new ReentrantOriginalsStore(
+                slots, values, safe.getOwners(), _modules(), safe.getThreshold(), infra.singleton, reentry
+            )
+        );
+    }
+
+    function _swapPayload(address liar) internal returns (SafeTx memory t) {
+        t = _safeTx(
+            address(new BybitStyleDelegate()), 0, BybitPayload.dataWithSingleton(liar), Enum.Operation.DelegateCall
+        );
+    }
+}
+
+/// @notice Production order: the attacker singleton's getters are NEVER called inside the hooks.
+///         The post-check compares the singleton first and reverts before any getter runs.
+abstract contract ReentrantSingletonRealOrderTest is ReentrantSingletonBase {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        virtual
+        override
+        returns (SafeFirewallGuardHarness)
+    {
+        return new PostCheckOnlyGuard(config); // only the operation policy is disabled
+    }
+
+    function test_PostCheck_AttackerGetterNeverCalled() public {
+        uint256 n = safe.nonce();
+        ReentrantLyingSingleton liar = _reentrantLiar(n + 1);
+        SafeTx memory t = _swapPayload(address(liar));
+
+        // Exactly one getOwners() call reaches the Safe: the pre-check's read of the honest singleton.
+        // The post-check reverts on SINGLETON before reading owners.
+        vm.expectCall(address(safe), abi.encodeWithSignature("getOwners()"), 1);
+        _execTxExpectRevert(
+            t, _changed(ISafeFirewallGuard.ProtectedField.SINGLETON, _b32(infra.singleton), _b32(address(liar)))
+        );
+        assertEq(safe.nonce(), n, "nonce changed");
+        assertEq(recipient.balance, 0, "re-entered transfer happened");
+    }
+}
+
+/// @notice Defence in depth: even with the singleton check removed (test-only UnsafeOrderGuard), an
+///         attacker getter that re-enters execTransaction can't change state, because the guard reads
+///         through STATICCALL and execTransaction writes storage (nonce++, Safe.sol:145).
+abstract contract StaticReadReentryTest is ReentrantSingletonBase {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        virtual
+        override
+        returns (SafeFirewallGuardHarness)
+    {
+        return new UnsafeOrderGuard(config);
+    }
+
+    function test_StaticRead_ReentryFromAttackerGetterFails() public {
+        uint256 n = safe.nonce();
+        ReentrantLyingSingleton liar = _reentrantLiar(n + 1);
+        SafeTx memory t = _swapPayload(address(liar));
+
+        // A storage write inside a static context fails with no revert data. The liar bubbles it, and
+        // so does the guard. Any other revert data would mean a different layer stopped it.
+        _execTxExpectEmptyRevert(t, "re-entry");
+        assertEq(safe.nonce(), n, "nonce changed");
+        assertEq(recipient.balance, 0, "re-entered transfer happened");
+        assertEq(_masterCopy(), infra.singleton, "singleton swap not reverted");
+    }
+
+    /// @dev Isolates the STATICCALL property. The attacker getter writes the threshold slot directly.
+    ///      Under STATICCALL the write fails (empty revert data), the transaction reverts, and the
+    ///      threshold is unchanged. With a non-static read it would persist, because nothing else in
+    ///      this test guard looks at the threshold.
+    function test_StaticRead_GetterStorageWriteFails() public {
+        uint256[] memory slots = new uint256[](0);
+        bytes32[] memory values = new bytes32[](0);
+        StateWritingLyingSingleton liar = new StateWritingLyingSingleton(
+            new OriginalsStore(slots, values, safe.getOwners(), _modules(), safe.getThreshold())
+        );
+        _execTxExpectEmptyRevert(_swapPayload(address(liar)), "getter storage write");
+        assertEq(safe.getThreshold(), THRESHOLD, "threshold written from inside the post-check");
+        assertEq(_masterCopy(), infra.singleton, "singleton swap not reverted");
+    }
+
+    /// @dev Control: the re-entry calldata is a valid signed transaction. Executed normally, outside a
+    ///      static context, a transaction of the same shape succeeds. So only the STATICCALL stops it.
+    function test_StaticRead_ReentryCalldataValidOutsideStaticContext() public {
+        bytes memory reentry = _signedExecCalldata(recipient, 1 wei, "", Enum.Operation.Call, 0, safe.nonce());
+        (bool ok,) = address(safe).call(reentry);
+        assertTrue(ok, "same-shape signed tx must succeed outside a static context");
+        assertEq(recipient.balance, 1 wei);
     }
 }
 
@@ -521,5 +658,63 @@ contract ModuleLimitOverMaxUnitTest is ModuleLimitOverMaxTest, LocalSafe {
 contract ModuleLimitOverMaxForkTest is ModuleLimitOverMaxTest, FeatureForkSafe {
     function _beforeGuardInstall() internal override(ModuleLimitOverMaxTest, FirewallTestBase) {
         ModuleLimitOverMaxTest._beforeGuardInstall();
+    }
+}
+
+contract ReentrantSingletonRealOrderUnitTest is ReentrantSingletonRealOrderTest, LocalSafe {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        override(ReentrantSingletonRealOrderTest, FirewallTestBase)
+        returns (SafeFirewallGuardHarness)
+    {
+        return ReentrantSingletonRealOrderTest._newGuard(config);
+    }
+
+    function setUp() public override(ReentrantSingletonBase, FirewallTestBase) {
+        ReentrantSingletonBase.setUp();
+    }
+}
+
+/// forge-config: default.fuzz.runs = 64
+contract ReentrantSingletonRealOrderForkTest is ReentrantSingletonRealOrderTest, FeatureForkSafe {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        override(ReentrantSingletonRealOrderTest, FirewallTestBase)
+        returns (SafeFirewallGuardHarness)
+    {
+        return ReentrantSingletonRealOrderTest._newGuard(config);
+    }
+
+    function setUp() public override(ReentrantSingletonBase, FirewallTestBase) {
+        ReentrantSingletonBase.setUp();
+    }
+}
+
+contract StaticReadReentryUnitTest is StaticReadReentryTest, LocalSafe {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        override(StaticReadReentryTest, FirewallTestBase)
+        returns (SafeFirewallGuardHarness)
+    {
+        return StaticReadReentryTest._newGuard(config);
+    }
+
+    function setUp() public override(ReentrantSingletonBase, FirewallTestBase) {
+        ReentrantSingletonBase.setUp();
+    }
+}
+
+/// forge-config: default.fuzz.runs = 64
+contract StaticReadReentryForkTest is StaticReadReentryTest, FeatureForkSafe {
+    function _newGuard(ISafeFirewallGuard.FirewallConfig memory config)
+        internal
+        override(StaticReadReentryTest, FirewallTestBase)
+        returns (SafeFirewallGuardHarness)
+    {
+        return StaticReadReentryTest._newGuard(config);
+    }
+
+    function setUp() public override(ReentrantSingletonBase, FirewallTestBase) {
+        ReentrantSingletonBase.setUp();
     }
 }

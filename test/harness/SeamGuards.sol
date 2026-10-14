@@ -4,6 +4,7 @@ pragma solidity 0.8.28;
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 
 import {SafeFirewallGuardHarness} from "./SafeFirewallGuardHarness.sol";
+import {SafeSlots} from "../../src/libraries/SafeSlots.sol";
 
 // Test-only guards that override the two `internal virtual` seams (ADR 0020, D1). Nothing in `src/`
 // may override these seams; `script/check-seam-overrides.sh` enforces that.
@@ -54,5 +55,19 @@ contract CompareSpyGuard is SafeFirewallGuardHarness {
 
     function _compareProtectedState() internal view override {
         if (FORCE_REVERT) revert CompareRan();
+    }
+}
+
+/// @notice UNSAFE ORDER, test only: the operation policy is disabled, and the comparison reads the owner
+///         list WITHOUT checking the singleton first. That lets an attacker singleton's getter run
+///         inside the post-check, to prove the read is a STATICCALL and re-entry can't change state
+///         (ADR 0020, decision 7). The production guard never does this.
+contract UnsafeOrderGuard is SafeFirewallGuardHarness {
+    constructor(FirewallConfig memory config) SafeFirewallGuardHarness(config) {}
+
+    function _checkOperation(address, Enum.Operation, ExecutionPath) internal view override {}
+
+    function _compareProtectedState() internal view override {
+        SafeSlots.ownersHash(SAFE);
     }
 }

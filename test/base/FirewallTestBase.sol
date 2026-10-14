@@ -245,6 +245,33 @@ abstract contract FirewallTestBase is Test {
         );
     }
 
+    /// @dev Asserts the transaction reverts with EMPTY revert data. Checked explicitly instead of with
+    ///      `vm.expectRevert("")`: forge 1.5.1 panics, rather than failing the test, when the actual
+    ///      revert data is non-empty.
+    function _execTxExpectEmptyRevert(SafeTx memory t, string memory reason) internal {
+        bytes memory sigs = _signTx(t);
+        (bool ok, bytes memory ret) = address(safe)
+            .call(
+                abi.encodeCall(
+                    ISafe.execTransaction,
+                    (
+                        t.to,
+                        t.value,
+                        t.data,
+                        t.operation,
+                        t.safeTxGas,
+                        t.baseGas,
+                        t.gasPrice,
+                        t.gasToken,
+                        t.refundReceiver,
+                        sigs
+                    )
+                )
+            );
+        assertFalse(ok, string.concat(reason, ": did not revert"));
+        assertEq(ret, "", string.concat(reason, ": revert data not empty"));
+    }
+
     function _readSlotAddress(bytes32 slot) internal view returns (address) {
         return abi.decode(safe.getStorageAt(uint256(slot), 1), (address));
     }

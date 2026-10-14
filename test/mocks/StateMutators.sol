@@ -89,7 +89,7 @@ contract LyingSingleton {
         }
     }
 
-    function getOwners() external view returns (address[] memory) {
+    function getOwners() external virtual returns (address[] memory) {
         return ORIGINALS.owners();
     }
 
@@ -99,5 +99,57 @@ contract LyingSingleton {
 
     function getModulesPaginated(address, uint256) external view returns (address[] memory, address) {
         return (ORIGINALS.modules(), SENTINEL);
+    }
+}
+
+/// @notice Originals plus a re-entry payload, for `ReentrantLyingSingleton`.
+contract ReentrantOriginalsStore is OriginalsStore {
+    address public immutable ORIGINAL_SINGLETON;
+    bytes public reentry;
+
+    constructor(
+        uint256[] memory slots,
+        bytes32[] memory values,
+        address[] memory owners_,
+        address[] memory modules_,
+        uint256 threshold_,
+        address originalSingleton,
+        bytes memory reentry_
+    ) OriginalsStore(slots, values, owners_, modules_, threshold_) {
+        ORIGINAL_SINGLETON = originalSingleton;
+        reentry = reentry_;
+    }
+}
+
+/// @notice A lying singleton whose `getOwners()` tries to re-enter `execTransaction` before answering.
+/// @dev It delegatecalls the ORIGINAL Safe singleton with a validly signed execTransaction, so real Safe
+///      code runs in the Safe's storage. Under a STATICCALL that can't succeed: execTransaction's
+///      `nonce++` is a storage write (Safe.sol:145). Any failure is bubbled unchanged.
+contract ReentrantLyingSingleton is LyingSingleton {
+    constructor(ReentrantOriginalsStore originals) LyingSingleton(originals) {}
+
+    function getOwners() external override returns (address[] memory) {
+        ReentrantOriginalsStore store = ReentrantOriginalsStore(address(ORIGINALS));
+        (bool ok, bytes memory ret) = store.ORIGINAL_SINGLETON().delegatecall(store.reentry());
+        if (!ok) {
+            assembly ("memory-safe") {
+                revert(add(ret, 0x20), mload(ret))
+            }
+        }
+        return store.owners();
+    }
+}
+
+/// @notice A lying singleton whose `getOwners()` writes the Safe's threshold slot directly (slot 4,
+///         SafeStorage.sol:17) before answering. Only a STATICCALL context can stop this write. Nothing
+///         else in the guard would see it, because the test guard compares only the owner list.
+contract StateWritingLyingSingleton is LyingSingleton {
+    constructor(OriginalsStore originals) LyingSingleton(originals) {}
+
+    function getOwners() external override returns (address[] memory) {
+        assembly ("memory-safe") {
+            sstore(4, 1)
+        }
+        return ORIGINALS.owners();
     }
 }
