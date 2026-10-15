@@ -186,6 +186,14 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
   and cancellation (R2) return before the module read, so even a Safe over the limit can't be
   permanently frozen (ADR 0020).
 
+- **Half-executed escape (accepted, fails closed; owner, 2026-10-15).** An escape takes two Safe
+  transactions in a fixed order: `setModuleGuard(x)`, then `setGuard(x)` (ADR 0014). If only the
+  first runs and the item is then cancelled or expires, the Safe keeps module guard `x` and
+  transaction guard = this guard. Nothing becomes reachable that the signers did not approve: `x`
+  passed the 72h delay and the I4.20 binding checks, and signed transactions still get this
+  guard's full pipeline. Recovery is a 72h escape back to this guard (`docs/runbook.md`).
+  Prevention is v2 (`docs/v1-spec.md`).
+
 ## 9. Open questions
 
 See the v1 open items in `docs/v1-spec.md`.

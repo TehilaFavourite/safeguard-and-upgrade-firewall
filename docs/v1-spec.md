@@ -155,7 +155,19 @@ Guard + factory, install checker, alert bot, Bybit fork demo, runbook.
 
 ## Open v1 items (decide before writing tests)
 
-None open.
+Phase 5 (self-call policy), raised 2026-10-15:
+- **5.1 Execution shape of a self-call item.** How the pre-check matches a matured item to the
+  signed call (by `keccak256(data)`?), one pending item per calldata, top-level only (as D3), and
+  consumption on success only (as D7).
+- **5.2 Post-check for an authorized self-call.** Either the function's field mask (other fields
+  compared), or exact after-values computed in the pre-check.
+- **5.3 Self-calls outside the ADR 0016 table** (`setup`, `simulateAndRevert`, `approveHash`,
+  `execTransaction`, views, handler-routed selectors, 1-3 byte data, value > 0 with empty data).
+- **5.4 `disableModule`:** on the module path, inside batches, and how many per transaction.
+- **5.5 `MAX_MODULES` on `enableModule`:** checked at queue only, or at queue and at execute, and
+  whether pending enable items count.
+- **5.6 Where the self-call rule sits** relative to the `_checkOperation` seam, so that the
+  post-check-only test guards stay meaningful.
 
 Resolved 2026-10-14 (fifth round, on-chain verification):
 - Bybit's Safe was v1.1.1 (3 of 6, nonce 71) at the pre-hack block 21,895,237; slot 0 changed in
@@ -199,3 +211,10 @@ Resolved earlier: ADRs 0004, 0008, 0011, 0012, 0013.
 NFTs and `setApprovalForAll` operators, a restrictive fallback handler (EIP-1271), L2s, a shared
 guard, oracle-based caps, relayer refunds, bot simulation of pending Safe Transaction Service
 transactions.
+
+- **Half-executed escape** (owner, 2026-10-15). Between `setModuleGuard(x)` and `setGuard(x)` the
+  Safe runs with module guard `x` and transaction guard = this guard. If the item is cancelled or
+  expires in between, that mixed state persists. It fails closed (ordinary transactions still pass,
+  and `x` was approved by the signers), and v1 handles it operationally (`docs/runbook.md`;
+  threat model §8). v2 candidate: one item covering both steps that can't be cancelled once step 1
+  has executed, or a guard-side check that refuses step 1 unless step 2 can follow.

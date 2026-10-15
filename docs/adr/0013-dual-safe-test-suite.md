@@ -117,3 +117,22 @@ addresses, so either the tests or the guard have to adapt. Candidates:
 - **`vm.etch`.** The unit base copies locally compiled code to the canonical addresses, and the
   guard hard-codes them as constants. Risk: the unit variant then runs 0.8.28 code at an address
   whose real code is 0.7.6. That is acceptable, because the fork variant covers the real code.
+
+## Headline example: the two Safes decode differently (Phase 4, 2026-10-15)
+
+This is the clearest case for Option C. R1 recognises `setModuleGuard(x)` / `setGuard(x)` only when
+the ABI word for `x` has zero high 96 bits. A mutant without that check survived the unit variant
+and was killed only by the fork variant:
+
+- **Canonical v1.5.0 singleton** (solc 0.7.6, ABI coder v1; `lib/safe-smart-account/hardhat.config.ts:53`,
+  and `Safe.sol` has no `pragma abicoder v2`). It **truncates** a dirty address argument to its low
+  160 bits and sets the module guard. Without the check, the dirty encoding would be a second,
+  unreviewed encoding of an escape step, and it would get the fast path.
+- **Local build** (the same sources compiled with solc 0.8.28, ABI coder v2). It **reverts** on the
+  dirty word, and `Safe.sol:184-190` bubbles up the empty revert data. The mutant is harmless here,
+  so a unit-only suite would have reported the check as dead weight.
+
+Test: `test_Escape_DirtyAddressArgumentGetsNoFastPath`, which accepts exactly these two outcomes.
+The general rule: **any property that depends on how the Safe decodes or validates input must be
+asserted on the fork variant.** The local build is not a stand-in for the deployed bytecode's input
+handling. See also `docs/findings.md`.
