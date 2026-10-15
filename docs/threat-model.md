@@ -162,6 +162,14 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
   (`CompatibilityFallbackHandler.sol:78-84`). The restrictive fallback handler is v2.
 - **Cap-rate drain by a trusted module** until detected (§3.3).
 - **Allowlisted routes with free parameters** leak up to the caps (§3.1).
+- **EIP-7702: an EOA today can have code tomorrow (for Phase 6).** Since EIP-7702, an EOA can
+  install a delegation designator and execute code. An allowlisted recipient that is an EOA when it
+  is allowlisted can later gain code: its `receive`/`fallback` could re-enter, consume gas, or route
+  funds elsewhere. Seen in practice: Foundry's `makeAddr("alice")` address has a 7702 delegation on
+  mainnet that forwards ETH (found in Phase 3). **The guard must never rely on a recipient being
+  code-free.** The Phase 6 allowlist design must address it, for example by requiring every
+  property it relies on to hold even if the recipient has code, and never using `extcodesize` as a
+  security check.
 - **Module list bound.** Every guarded execution reverts with `TooManyModules` on a Safe with more
   than 16 modules. The state is prevented at install and when queueing `enableModule`. Escape (R1)
   and cancellation (R2) return before the module read, so even a Safe over the limit can't be

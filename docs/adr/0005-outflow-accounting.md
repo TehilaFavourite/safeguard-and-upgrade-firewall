@@ -59,9 +59,36 @@ the pre-check.
    - The per-token outflow totals use **one small assembly library**: a keccak-keyed transient map
      plus a bounded token list. At most **8 distinct tokens per transaction** (ETH counts as one);
      above that it reverts with `TooManyTokens`.
-   - **This is the only place assembly is allowed** in `src/` (see `docs/engineering-principles.md`).
-     It must have 100% line and branch coverage, and its slot derivation must be documented and
-     collision-tested against the typed transient variables.
+   - This is one of the **two places assembly is allowed** in `src/` (see below and
+     `docs/engineering-principles.md`). It must have 100% line and branch coverage, and its slot
+     derivation must be documented and collision-tested against the typed transient variables.
+
+   **Second assembly exception: `MemoryReader` (owner, 2026-10-15; Phase 3).** The batch decoder
+   reads fields from `bytes memory` (the hook's `data` can't be `calldata`: with 11 parameters that
+   hits "stack too deep", verified).
+   - **Options measured** with the real libraries (gas to read op, to, value, length and selector per
+     entry of a batch of ERC-20 transfers):
+
+     | Entries | Optimizer off (project setting): byte loop | `MemoryReader` | Optimizer on, 200 runs (reference): byte loop | `MemoryReader` |
+     |---|---|---|---|---|
+     | 1 | 43,476 | 4,510 | 25,946 | 2,461 |
+     | 8 | 271,102 | 32,748 | 161,053 | 17,392 |
+     | 32 | 1,051,534 | 129,564 | 624,277 | 68,584 |
+
+     The full decoder (wrapper, padding and entry checks) at 32 entries costs 150,537 gas with the
+     optimizer off.
+   - **Rejected alternatives:**
+     - a pure-Solidity byte loop, about 8-10× the cost;
+     - reading the hook's `msg.data` by hand, which re-implements the ABI layout of the hook call;
+     - `via_ir`, which changes the whole compiler pipeline.
+   - **Constraints:**
+     - read-only;
+     - each read function does an overflow-safe bounds check, then exactly one `mload`, and there is
+       no `mstore`;
+     - the assembly is marked `memory-safe`;
+     - fuzzed against a byte-by-byte reference, including fields ending at the last byte of the
+       buffer (non-zero memory beyond it) and offsets near `type(uint256).max`;
+     - 100% coverage.
 4. **Time-based policies make blocked transactions come back to life.** A transaction blocked
    only by the rolling cap becomes valid again when the window rolls over, with no state change.
    See `docs/runbook.md`.

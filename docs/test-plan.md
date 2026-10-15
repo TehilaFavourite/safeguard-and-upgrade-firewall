@@ -103,7 +103,7 @@ Principle (ADR 0003): one accepted encoding per batch.
 
 | ID | Requirement | Tests |
 |---|---|---|
-| I3.9 | Inner calls go through the pipeline; inner `to == GUARD` rejected (closes the ADR 0018 batch gap) | `testFuzz_Batch_InnerCallToGuardAnySelectorReverts`, `test_Batch_OneBadEntryRevertsWholeBatch` |
+| I3.9 | Inner calls go through the pipeline; inner `to == GUARD` rejected (closes the ADR 0018 batch gap) | `testFuzz_Batch_InnerCallToGuardAnySelectorReverts`, `test_Batch_InnerCallToGuardShortCalldataReportsPaddedSelector` (empty and 2-byte calldata report a zero-padded selector, same as top level), `test_Batch_OneBadEntryRevertsWholeBatch` |
 | I3.10 | **Flip:** inner GUARD hook, Phase 2 `NoActiveExecution(SIGNED, NONE)` (post) → Phase 3 `GuardCallRejected` (pre) | `test_Batch_InnerCallToGuardHookRevertsAtPreCheck`. The `setFallbackHandler` interim test stays post-check-caught until **Phase 5** |
 | I3.11 | Regression: well-formed transfers pass | `test_Batch_WellFormedTransfersPass` |
 | D2 | Outer delegatecall value must be zero | `test_Batch_OuterValueNonZeroReverts` |
@@ -118,7 +118,13 @@ Principle (ADR 0003): one accepted encoding per batch.
 | I3.12 | Every accepted batch executes exactly as decoded | `testFuzz_Differential_WellFormedBatchesExecuteAsDecoded`, `testFuzz_Differential_MutatedBatches` (truncate, extend, alter dataLength) |
 | I3.13 | Why strictness matters: `MultiSendCallOnly` ignores up to 32 trailing bytes and reads past its buffer | `test_Differential_MultiSendIgnoresTrailingBytesDecoderRejects`, `test_Differential_MultiSendReadsPastBufferDecoderRejects` |
 
-**MemoryReader** (`MemoryReader.t.sol`, contingent on approval of the assembly exception): every reader fuzzed against a byte-by-byte reference; exact `MemoryReadOutOfBounds` errors, including offsets near 2^256 and an empty buffer.
+**MemoryReader** (`MemoryReader.t.sol`; exception approved 2026-10-15):
+- every reader is fuzzed against a byte-by-byte reference;
+- exact `MemoryReadOutOfBounds` errors, including an empty buffer;
+- **condition 1:** `testFuzz_MemoryReader_FieldEndingAtLastByteIgnoresTrailingMemory`. Every width
+  ends exactly at the last byte, with `0xff` memory beyond the buffer;
+- **condition 2:** `testFuzz_MemoryReader_OffsetNearMaxRevertsOutOfBounds` (offsets within 64 of
+  2^256, every width) and `test_MemoryReader_HugeOffsetRevertsOutOfBounds`.
 
 **Phase 3 red check** (2026-10-14, Phase 2 code plus compile-only stubs, both variants, `-j 1`): 64 tests.
 - **53 failed** as required. The flip shows exactly `NoActiveExecution(1, 0) != GuardCallRejected(0x93271368)`.
@@ -285,6 +291,10 @@ A handler mixes signed transactions, module transactions, batches, config change
 - The same rule applies to each later phase, run against the previous phase's code.
 
 ## Tooling gates (not tests, checked every phase)
+
+- **Coverage filter:** use `--no-match-coverage '^(test|lib|script)/'`. The unanchored
+  `'(test|lib|script)'` also matches `src/libraries/`, which silently dropped `SafeSlots.sol` from
+  the Phase 2 reports. It was at 100% when re-measured in Phase 3.
 
 - `forge fmt --check`
 - Slither, with findings in `docs/slither-triage.md`

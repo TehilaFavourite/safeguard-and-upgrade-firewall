@@ -16,3 +16,13 @@ high, medium or low findings.
 | 5-8 | `naming-convention` | `ISafeFirewallGuard.SAFE()`, `MULTISEND_CALL_ONLY()`, `PERMIT2()`, `IGuardFactory.VERSION()` | Accepted | Getters for the immutables and constant above, named to match. |
 | 9 | `too-many-digits` | `GuardFactory._predict` | False positive | The flagged "literal" is `type(SafeFirewallGuard).creationCode`, not a numeric literal. |
 | 10 | `immutable-states` | `SafeFirewallGuard._expectedSingleton` | Accepted, revisit in Phase 8 | Deliberately storage: the timelocked singleton-migration item (ADR 0015, Phase 8) updates it. Making it immutable now would change the storage layout when Phase 8 lands. If Phase 8 replaces the guard on migration instead, this becomes an immutable. |
+
+## Phase 3 (2026-10-15, Slither 0.11.6)
+
+26 contracts analyzed with 102 detectors: **11 results**. The 10 from Phase 2 are unchanged
+(#1-10 above, same reasons). There are two Phase 3 findings: one fixed, one triaged.
+
+| # | Detector | Location | Status | Reason |
+|---|---|---|---|---|
+| 11 | `uninitialized-local` | `MultiSendDecoder.decode`: `count` | **Fixed** | Solidity zero-initializes locals, so this wasn't a bug. `count` and `pos` are now initialized explicitly for clarity. |
+| 12 | `assembly` | `MemoryReader._load` | Accepted | The approved second assembly exception (ADR 0005; engineering principles). Read-only: one `mload` after an overflow-safe bounds check, no `mstore`, marked `memory-safe`, 100% covered and fuzzed against a byte-by-byte reference. |

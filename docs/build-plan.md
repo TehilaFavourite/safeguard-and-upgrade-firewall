@@ -19,7 +19,8 @@ src/
     TokenBucket.sol            ADR 0012
     TimelockQueue.sol          queue/execute/cancel/expiry, delay classes (ADR 0002, 0008, 0011)
     SafeSlots.sol              slot constants + snapshot/compare helpers
-    TransientTokenMap.sol      keyed transient map + bounded token list; the only assembly (ADR 0005)
+    TransientTokenMap.sol      keyed transient map + bounded token list; assembly exception 1 (ADR 0005)
+    MemoryReader.sol           read-only bounds-checked field reads; assembly exception 2 (ADR 0005)
   interfaces/
 test/
   base/FirewallTestBase.sol    abstract; _deploySafe() hook (ADR 0013)
@@ -83,8 +84,9 @@ bot/                           alert bot (Phase 12)
   - Refund ban, R2 cancellation, protected-slot snapshot and compare.
   - Separate tests proving that the pre-check alone **and** the post-check alone each stop a
     Bybit-shaped payload.
-  - ⚠️ **Do not deploy or tag a release between Phase 2 and Phase 3.** Batch inner calls are only
-    post-checked until the decoder lands.
+  - ⚠️ **Not deployable before Phase 10:** the allowlist, timelock and caps are not yet in place.
+    This replaces the Phase 2-3 interim warning, which is resolved: since Phase 3, batch inner
+    calls get the same pre-check as top-level calls.
 - **3. MultiSend decoder.**
   - Strict parsing; `to == 0` normalized to the Safe; plain `MultiSend` rejected.
   - Fuzzing with malformed batches.
