@@ -22,7 +22,7 @@ abstract contract ReentrancyTest is FirewallTestBase {
         super.setUp();
         forwarder = new Forwarder();
         sequencer = new SequenceExecutor();
-        recipient = makeAddr("recipient");
+        recipient = _eoa("recipient");
     }
 
     // ---------------------------------------------------------------- I1.6 nested executions

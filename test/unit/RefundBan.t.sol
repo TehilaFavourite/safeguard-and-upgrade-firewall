@@ -16,7 +16,7 @@ abstract contract RefundBanTest is FirewallTestBase {
 
     function setUp() public virtual override {
         super.setUp();
-        recipient = makeAddr("recipient");
+        recipient = _eoa("recipient");
     }
 
     function _refundError(uint256 gasPrice, address gasToken, address refundReceiver)
@@ -36,14 +36,14 @@ abstract contract RefundBanTest is FirewallTestBase {
     }
 
     function test_Refunds_GasTokenNonZeroReverts() public {
-        address token = makeAddr("gasToken");
+        address token = _eoa("gasToken");
         SafeTx memory t = _safeTx(recipient, 1 wei, "", Enum.Operation.Call);
         t.gasToken = token;
         _execTxExpectRevert(t, _refundError(0, token, address(0)));
     }
 
     function test_Refunds_RefundReceiverNonZeroReverts() public {
-        address payable receiver = payable(makeAddr("refundReceiver"));
+        address payable receiver = payable(_eoa("refundReceiver"));
         SafeTx memory t = _safeTx(recipient, 1 wei, "", Enum.Operation.Call);
         t.refundReceiver = receiver;
         _execTxExpectRevert(t, _refundError(0, address(0), receiver));
@@ -76,7 +76,7 @@ abstract contract RefundBanTest is FirewallTestBase {
 
     /// @dev A cancellation-shaped transaction with a refund field set must not get R2's free pass.
     function test_HookOrder_CancellationShapedWithRefundRevertsWithRefundError() public {
-        address payable receiver = payable(makeAddr("refundReceiver"));
+        address payable receiver = payable(_eoa("refundReceiver"));
         SafeTx memory t = _safeTx(address(safe), 0, "", Enum.Operation.Call);
         t.refundReceiver = receiver;
         _execTxExpectRevert(t, _refundError(0, address(0), receiver));

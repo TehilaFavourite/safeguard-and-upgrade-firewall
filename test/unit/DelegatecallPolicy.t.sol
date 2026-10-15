@@ -16,7 +16,7 @@ abstract contract DelegatecallPolicyTest is FirewallTestBase {
 
     function setUp() public virtual override {
         super.setUp();
-        recipient = makeAddr("recipient");
+        recipient = _eoa("recipient");
     }
 
     /// @dev One packed MultiSend entry: operation (1 byte), to (20), value (32), data length (32),
@@ -58,11 +58,12 @@ abstract contract DelegatecallPolicyTest is FirewallTestBase {
         assertEq(recipient.balance, 1 wei);
     }
 
-    /// @dev Documents the Phase 2 interim gap: a batch inner self-call isn't pre-checked yet, so it
-    ///      is caught by the post-check (ProtectedStateChanged). From Phase 3, the pre-check rejects it
-    ///      first and this expectation is updated.
+    /// @dev An inner self-call (setFallbackHandler) is still caught only by the post-check
+    ///      (ProtectedStateChanged). Phase 3 decodes batches, but the pre-check has no self-call rule until
+    ///      Phase 5. It flips to a pre-check rejection then, and this expectation is updated. (The ADR 0018
+    ///      batch gap, an inner call to GUARD, flipped in Phase 3: see BatchPolicy.t.sol.)
     function test_Delegatecall_InterimBatchInnerCallCaughtOnlyByPostCheck() public {
-        address newHandler = makeAddr("newHandler");
+        address newHandler = _eoa("newHandler");
         bytes memory inner = abi.encodeCall(IFallbackManager.setFallbackHandler, (newHandler));
         _execSignedExpectRevert(
             infra.multiSendCallOnly,

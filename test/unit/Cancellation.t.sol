@@ -29,7 +29,7 @@ abstract contract CancellationTest is FirewallTestBase {
     ///      cancellation, its signatures no longer match the hash for the new nonce. Safe recovers a
     ///      non-owner and reverts with GS026 (Safe.sol:338-339).
     function test_Cancellation_KillsBlockedSignedTx() public {
-        address target = makeAddr("anyDelegatecallTarget");
+        address target = _eoa("anyDelegatecallTarget");
         uint256 n = safe.nonce();
         bytes memory blockedSigs = _sign(_txHash(target, 0, "", Enum.Operation.DelegateCall, 0, n));
 
@@ -52,7 +52,7 @@ abstract contract CancellationTest is FirewallTestBase {
     function test_Cancellation_MarkerDoesNotLeakToNextExecution() public {
         SequenceExecutor sequencer = new SequenceExecutor();
         address oldHandler = infra.fallbackHandler;
-        address newHandler = makeAddr("newHandler");
+        address newHandler = _eoa("newHandler");
         uint256 n = safe.nonce();
 
         SequenceExecutor.Step[] memory steps = new SequenceExecutor.Step[](2);
@@ -101,7 +101,7 @@ abstract contract CancellationHostileGuardTest is FirewallTestBase {
     ///      reverts.
     function test_HostileGuard_BlocksOrdinaryCall() public {
         _execTxExpectRevert(
-            _safeTx(makeAddr("recipient"), 1 wei, "", Enum.Operation.Call),
+            _safeTx(_eoa("recipient"), 1 wei, "", Enum.Operation.Call),
             abi.encodeWithSelector(PolicyAlwaysRevertsGuard.SeamForcedRevert.selector)
         );
     }

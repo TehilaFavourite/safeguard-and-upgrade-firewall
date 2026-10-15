@@ -8,14 +8,15 @@ import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 
 import {ISafeFirewallGuard} from "./interfaces/ISafeFirewallGuard.sol";
 import {SafeSlots} from "./libraries/SafeSlots.sol";
+import {MultiSendDecoder} from "./libraries/MultiSendDecoder.sol";
 
 /// @title SafeFirewallGuard
 /// @notice Transaction guard and module guard bound to a single Safe v1.5.0 (ADR 0001, ADR 0007).
-/// @dev Phase 2 scope: the hook prefix, the refund ban, R2 cancellation, calls to the guard, the
-///      expected-singleton check, the delegatecall policy and the protected-state snapshot/compare.
-///      ⚠️ Phase 2 → 3 interim: delegatecalls to MULTISEND_CALL_ONLY pass the pre-check WITHOUT their
-///      inner calls being decoded. Batch contents are only post-checked until the decoder lands
-///      (Phase 3). Do not deploy or tag a release from this state (docs/build-plan.md).
+/// @dev Phase 3 scope: the hook prefix, the refund ban, R2 cancellation, calls to the guard, the
+///      expected-singleton check, the delegatecall policy, strict MultiSendCallOnly batch decoding with
+///      per-entry policy, and the protected-state snapshot/compare.
+///      ⚠️ Not deployable before Phase 10: the allowlist, timelock and caps are not yet in place
+///      (docs/build-plan.md).
 ///      Not upgradeable. Replacement happens only through the escape path (ADR 0014).
 contract SafeFirewallGuard is ISafeFirewallGuard {
     /// @inheritdoc ISafeFirewallGuard
@@ -94,6 +95,7 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
         _requireExpectedSingleton(); // step 8 (ADR 0020, I2.23)
         _snapshotProtectedState(); // step 9 (ADR 0020)
         _checkOperation(to, operation, ExecutionPath.SIGNED); // step 10, policy pipeline (ADR 0003)
+        _checkBatch(to, value, data, operation); // step 10, each inner call of a batch (ADR 0003)
     }
 
     /// @notice Post-check for `Safe.execTransaction`, called on the guard address cached before
@@ -209,6 +211,25 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
     function _requireNoRefund(uint256 gasPrice, address gasToken, address refundReceiver) private pure {
         if (gasPrice != 0 || gasToken != address(0) || refundReceiver != address(0)) {
             revert RefundNotAllowed(gasPrice, gasToken, refundReceiver);
+        }
+    }
+
+    /// @dev Step 10 for batches (ADR 0003). Applies only to a DelegateCall to MULTISEND_CALL_ONLY, the
+    ///      only delegatecall `_checkOperation` lets through on the signed path:
+    ///      - the outer value must be zero (D2);
+    ///      - the batch is decoded strictly;
+    ///      - each inner call goes through the same per-call policy as a top-level Call.
+    ///      There are no fast paths for entries: R1 and R2 apply only to top-level transactions, so a
+    ///      batch always gets the post-check.
+    function _checkBatch(address to, uint256 value, bytes memory data, Enum.Operation operation) private view {
+        if (operation != Enum.Operation.DelegateCall || to != MULTISEND_CALL_ONLY) return;
+        if (value != 0) revert DelegateCallValueNotZero(value);
+
+        MultiSendDecoder.Entry[] memory entries = MultiSendDecoder.decode(data, SAFE);
+        for (uint256 i = 0; i < entries.length; i++) {
+            address inner = entries[i].to;
+            if (inner == address(this)) revert GuardCallRejected(MultiSendDecoder.selectorOf(data, entries[i]));
+            if (inner == MULTISEND_CALL_ONLY) revert NestedBatchNotAllowed(i);
         }
     }
 

@@ -153,7 +153,7 @@ abstract contract ConstructionTest is FirewallTestBase {
     ///      copies return data (ModuleManager.sol:168-191), checks the returned address.
     function test_Factory_ThirdPartyPreDeployDoesNotBreakSafeDeploy() public {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
-        vm.prank(makeAddr("frontRunner"));
+        vm.prank(_eoa("frontRunner"));
         address preDeployed = factory.deploy(cfg);
         bytes memory deployCall = abi.encodeCall(GuardFactory.deploy, (cfg));
 

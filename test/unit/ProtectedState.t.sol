@@ -81,7 +81,7 @@ abstract contract ProtectedStateTest is ProtectedStateBase {
     }
 
     function test_PostCheck_FallbackHandlerChangeReverts() public {
-        address newHandler = makeAddr("newHandler");
+        address newHandler = _eoa("newHandler");
         _execSignedExpectRevert(
             address(safe),
             0,
@@ -93,7 +93,7 @@ abstract contract ProtectedStateTest is ProtectedStateBase {
 
     /// @dev The module linked list prepends (ModuleManager.sol:134-135).
     function test_PostCheck_ModuleListChangeReverts() public {
-        address newModule = makeAddr("newModule");
+        address newModule = _eoa("newModule");
         address[] memory beforeList = _modules();
         _execSignedExpectRevert(
             address(safe),
@@ -110,7 +110,7 @@ abstract contract ProtectedStateTest is ProtectedStateBase {
 
     /// @dev The owner linked list prepends (OwnerManager.sol addOwnerWithThreshold). Threshold unchanged.
     function test_PostCheck_OwnersChangeReverts() public {
-        address newOwner = makeAddr("newOwner");
+        address newOwner = _eoa("newOwner");
         address[] memory beforeList = safe.getOwners();
         _execSignedExpectRevert(
             address(safe),
@@ -137,7 +137,7 @@ abstract contract ProtectedStateTest is ProtectedStateBase {
 
     /// @dev I2.16: the module path gets the same comparison (ModuleManager.sol:101, 120).
     function test_PostCheck_ModulePathFallbackHandlerChangeReverts() public {
-        address newHandler = makeAddr("newHandler");
+        address newHandler = _eoa("newHandler");
         vm.expectRevert(
             _changed(ISafeFirewallGuard.ProtectedField.FALLBACK_HANDLER, _b32(infra.fallbackHandler), _b32(newHandler))
         );
@@ -152,7 +152,7 @@ abstract contract ProtectedStateTest is ProtectedStateBase {
 
     /// @dev Regression: an execution that changes no protected field passes.
     function test_PostCheck_NoProtectedChangePasses() public {
-        address recipient = makeAddr("recipient");
+        address recipient = _eoa("recipient");
         assertTrue(_execSigned(recipient, 1 wei, "", Enum.Operation.Call));
     }
 
@@ -377,7 +377,7 @@ abstract contract ReentrantSingletonBase is ProtectedStateBase {
 
     function setUp() public virtual override {
         super.setUp();
-        recipient = makeAddr("recipient");
+        recipient = _eoa("recipient");
     }
 
     /// @dev A lying singleton whose getOwners() delegatecalls the ORIGINAL singleton with a validly
@@ -525,7 +525,7 @@ abstract contract ModuleLimitAtMaxTest is ProtectedStateBase {
 
     function test_ModuleLimit_AtMaxPasses() public {
         assertEq(_modules().length, MAX_MODULES);
-        assertTrue(_execSigned(makeAddr("recipient"), 1 wei, "", Enum.Operation.Call));
+        assertTrue(_execSigned(_eoa("recipient"), 1 wei, "", Enum.Operation.Call));
     }
 }
 
@@ -546,7 +546,7 @@ abstract contract ModuleLimitOverMaxTest is ProtectedStateBase {
     function test_ModuleLimit_OverMaxSignedReverts() public {
         assertEq(_modules().length, MAX_MODULES + 1);
         _execSignedExpectRevert(
-            makeAddr("recipient"),
+            _eoa("recipient"),
             1 wei,
             "",
             Enum.Operation.Call,
@@ -555,7 +555,7 @@ abstract contract ModuleLimitOverMaxTest is ProtectedStateBase {
     }
 
     function test_ModuleLimit_OverMaxModulePathReverts() public {
-        address recipient = makeAddr("recipient");
+        address recipient = _eoa("recipient");
         vm.expectRevert(abi.encodeWithSelector(ISafeFirewallGuard.TooManyModules.selector, MAX_MODULES));
         module.exec(safe, recipient, 1 wei, "", Enum.Operation.Call);
     }

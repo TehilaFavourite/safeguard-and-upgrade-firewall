@@ -70,6 +70,38 @@ interface ISafeFirewallGuard is ITransactionGuard, IModuleGuard {
     ///         catches a Safe that was already compromised before this transaction (ADR 0020, I2.23).
     error UnexpectedSingleton(address actual, address expected);
 
+    // ---- MultiSendCallOnly batch decoding (ADR 0003): one accepted encoding per batch ----
+
+    /// @notice The delegatecall to MULTISEND_CALL_ONLY doesn't call `multiSend(bytes)`.
+    error MultiSendBadSelector(bytes4 selector);
+
+    /// @notice The `multiSend(bytes)` ABI wrapper isn't canonical: the offset word isn't 0x20, or
+    ///         `data.length != 4 + 32 + 32 + ceil32(declaredLength)`.
+    error MultiSendNotCanonical(uint256 offsetWord, uint256 declaredLength, uint256 dataLength);
+
+    /// @notice A byte of the ABI padding after the packed transactions isn't zero (ADR 0003, D3).
+    error MultiSendPaddingNotZero(uint256 position);
+
+    /// @notice The batch contains no transactions.
+    error EmptyBatch();
+
+    /// @notice The entry at `entryOffset` (relative to the packed transactions) doesn't fit: the
+    ///         85-byte header or its data runs past the end, so entries don't tile the buffer exactly.
+    error MultiSendMalformed(uint256 entryOffset);
+
+    /// @notice Inner entry `index` has an operation byte other than 0 (Call). Byte 1 (DelegateCall) is
+    ///         rejected by the guard itself (ADR 0003).
+    error InnerOperationNotAllowed(uint256 index, uint8 operation);
+
+    /// @notice The batch has more than `max` inner calls (ADR 0003, D1).
+    error TooManyBatchCalls(uint256 max);
+
+    /// @notice Inner entry `index` calls MULTISEND_CALL_ONLY itself (ADR 0003, D4).
+    error NestedBatchNotAllowed(uint256 index);
+
+    /// @notice A delegatecall carried a non-zero `value`, which Executor ignores (ADR 0003, D2).
+    error DelegateCallValueNotZero(uint256 value);
+
     /// @notice A constructor argument that must be non-zero was zero.
     error ZeroAddress(string field);
 

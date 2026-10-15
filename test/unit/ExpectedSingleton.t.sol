@@ -33,11 +33,11 @@ abstract contract ExpectedSingletonTest is FirewallTestBase {
     }
 
     function test_ExpectedSingleton_AlreadySwappedBlocksSignedTx() public {
-        _execSignedExpectRevert(makeAddr("recipient"), 1 wei, "", Enum.Operation.Call, _unexpected());
+        _execSignedExpectRevert(_eoa("recipient"), 1 wei, "", Enum.Operation.Call, _unexpected());
     }
 
     function test_ExpectedSingleton_AlreadySwappedBlocksModuleTx() public {
-        address recipient = makeAddr("recipient");
+        address recipient = _eoa("recipient");
         vm.expectRevert(_unexpected());
         module.exec(safe, recipient, 1 wei, "", Enum.Operation.Call);
     }
@@ -67,7 +67,7 @@ abstract contract ExpectedSingletonTest is FirewallTestBase {
     /// @dev Control: with the correct singleton restored, the same transaction passes.
     function test_ExpectedSingleton_ControlCorrectSingletonPasses() public {
         vm.store(address(safe), SINGLETON_SLOT, bytes32(uint256(uint160(infra.singleton))));
-        assertTrue(_execSigned(makeAddr("recipient"), 1 wei, "", Enum.Operation.Call));
+        assertTrue(_execSigned(_eoa("recipient"), 1 wei, "", Enum.Operation.Call));
     }
 }
 

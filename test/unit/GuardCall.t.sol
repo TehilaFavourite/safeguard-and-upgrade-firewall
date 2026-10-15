@@ -69,7 +69,7 @@ abstract contract GuardCallTest is FirewallTestBase {
     ///      transfer), so this test keeps passing until Phase 6, where the allowlist (P2) makes it
     ///      fail. It is deleted then, under the red-before-green rule in docs/test-plan.md.
     function test_Skeleton_AllowsOrdinaryCall() public {
-        address recipient = makeAddr("recipient");
+        address recipient = _eoa("recipient");
         assertTrue(_execSigned(recipient, 1 ether, "", Enum.Operation.Call));
         assertEq(recipient.balance, 1 ether);
     }

@@ -272,6 +272,14 @@ abstract contract FirewallTestBase is Test {
         assertEq(ret, "", string.concat(reason, ": revert data not empty"));
     }
 
+    /// @dev An address with no code, for EOA fixtures. Labels are namespaced, and code is checked
+    ///      because well-known test addresses can have code on a mainnet fork. For example,
+    ///      makeAddr("alice") carries an EIP-7702 delegation that forwards ETH, found in Phase 3.
+    function _eoa(string memory label) internal returns (address a) {
+        a = makeAddr(string.concat("safe-firewall.", label));
+        require(a.code.length == 0, string.concat("fixture address has code: ", label));
+    }
+
     function _readSlotAddress(bytes32 slot) internal view returns (address) {
         return abi.decode(safe.getStorageAt(uint256(slot), 1), (address));
     }

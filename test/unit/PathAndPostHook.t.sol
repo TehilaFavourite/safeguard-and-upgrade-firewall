@@ -68,7 +68,7 @@ abstract contract PathAndPostHookTest is FirewallTestBase {
     ///      one test transaction, so the transient path flag carries over between them.
     function test_PostHook_PathMismatchReverts() public {
         vm.prank(address(safe));
-        guard.checkModuleTransaction(makeAddr("anyTarget"), 0, "", Enum.Operation.Call, address(module));
+        guard.checkModuleTransaction(_eoa("anyTarget"), 0, "", Enum.Operation.Call, address(module));
 
         vm.expectRevert(
             abi.encodeWithSelector(
