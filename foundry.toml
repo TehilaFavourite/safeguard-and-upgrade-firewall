@@ -11,6 +11,12 @@ evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
 
+# Toolchain frozen (ADR 0022): solc 0.8.28, legacy pipeline (via_ir off), Yul optimizer off. The Yul
+# optimizer is off to remove the precondition of YulOptimizerKnowledgeBaseStaleBookkeeping (fixed in
+# 0.8.38). Revisited once, deliberately, before the Phase 10 freeze, with a fresh bug-list check.
+[profile.default.optimizer_details]
+yul = false
+
 [rpc_endpoints]
 # Read from .env (git-ignored). Never commit the URL.
 # Fork tests fetch accounts and storage over RPC. Throttle and retry so fuzzing on the fork variant

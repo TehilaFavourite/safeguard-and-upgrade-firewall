@@ -1,6 +1,6 @@
 # ADR 0022: Compile with the optimizer on (200 runs)
 
-- Status: Accepted (one sub-decision open: the Yul-optimizer bug, see below)
+- Status: Accepted
 - Date: 2026-10-15
 - Effective: before Phase 4
 
@@ -65,7 +65,7 @@ under EIP-170. Gas per transaction is cents either way.
 | `LostStorageArrayWriteOnSlotOverflow` (fixed 0.8.32) | low | none | **Not triggered:** `src/` has no storage arrays. Recheck whenever a storage array is added (Phases 6+). |
 | `YulOptimizerKnowledgeBaseStaleBookkeeping` (fixed 0.8.38) | low | `yulOptimizer` | **⚠️ In scope.** The Yul optimizer is on under our settings. It runs on inline assembly and on solc's generated Yul utility code. The bug can replace a load with a stale value, or drop a needed store, when two addresses computed from a reassigned variable coincide at runtime. Our current assembly is a single `mload` (`MemoryReader`), but the Phase 7 transient token map (keccak-keyed `tstore`/`tload`) is exactly the kind of code to worry about. **Owner decision pending:** see the sub-decision. |
 
-### Open sub-decision: the Yul-optimizer bug
+### Sub-decision: the Yul-optimizer bug (owner, 2026-10-15): option A
 
 - **A. Keep the legacy optimizer on, turn the Yul optimizer off**
   (`[profile.default.optimizer_details] yul = false`). Measured: guard **7,461 B** (+578), factory
@@ -74,6 +74,23 @@ under EIP-170. Gas per transaction is cents either way.
   for that version, a re-run of everything, and a check of the `transient` and other features we
   rely on.
 - **C. Accept it** (low severity) and add targeted differential tests for the Phase 7 transient map.
+
+**Decided: A.** `[profile.default.optimizer_details] yul = false`.
+
+## The frozen toolchain
+
+**solc 0.8.28, legacy pipeline (`via_ir` off), optimizer on with `runs = 200`, Yul optimizer off.**
+
+- **Verified in the build-info:** `{"enabled": true, "runs": 200, "details": {"yul": false}}`,
+  `viaIR` unset.
+- **Re-run under it on the committed Phase 3 code:**
+  - unit **150/150**, fork **119/119**;
+  - opcode, seam and coverage gates ok, fmt clean;
+  - sizes: `SafeFirewallGuard` **7,461 B** runtime (8,423 B init), `GuardFactory` **9,731 B**.
+- **The compiler version is revisited once, deliberately, before the Phase 10 freeze**, with a fresh
+  known-bugs check (0.8.38+ fixes every bug listed above). There are no ad-hoc changes before then.
+- **Regardless of compiler settings,** the Phase 7 transient map is fuzzed against a plain reference
+  implementation (a storage-backed mapping and array) for every operation.
 
 ## Consequences
 
