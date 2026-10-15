@@ -18,6 +18,34 @@ interface ISafeFirewallGuard is ITransactionGuard, IModuleGuard {
         address singleton;
         address multiSendCallOnly;
         address permit2;
+        /// @dev Cancel-only guardian (ADR 0008). Required, never removable, != the guard (ADR 0023, D5).
+        address guardian;
+    }
+
+    /// @notice Kinds of timelocked items (ADR 0023). Later phases append kinds.
+    enum ItemKind {
+        ESCAPE, // guard removal or replacement (ADR 0014), 72h
+        GUARDIAN_CHANGE, // guardian replacement (ADR 0008), 48h
+        CONFIG // guard configuration (Phases 6-7), 48h
+    }
+
+    enum ItemStatus {
+        NONE,
+        QUEUED,
+        EXECUTED,
+        CANCELLED,
+        EXPIRED
+    }
+
+    /// @notice A timelocked item. Executable while `eta <= now < expiresAt` and its key epoch is current.
+    struct Item {
+        ItemKind kind;
+        ItemStatus status;
+        bytes32 key;
+        uint64 eta;
+        uint64 expiresAt;
+        uint64 keyEpoch;
+        bytes32 payloadHash;
     }
 
     /// @notice Which execution path is currently being guarded (ADR 0007).
@@ -38,8 +66,43 @@ interface ISafeFirewallGuard is ITransactionGuard, IModuleGuard {
         THRESHOLD
     }
 
+    // ---- timelock events (ADR 0023): enough for the alert bot to work from events alone ----
+
+    event Queued(
+        bytes32 indexed id, ItemKind indexed kind, bytes32 indexed key, uint64 eta, uint64 expiresAt, bytes payload
+    );
+    event Executed(bytes32 indexed id, ItemKind indexed kind);
+    event Cancelled(bytes32 indexed id, ItemKind indexed kind, address indexed by);
+    event Expired(bytes32 indexed id, ItemKind indexed kind);
+    event KeyEpochAdvanced(bytes32 indexed key, uint64 epoch);
+    event GuardianChanged(address indexed previous, address indexed current);
+
     /// @notice A hook was called by an address other than the bound Safe (ADR 0007).
     error NotSafe(address caller);
+
+    // ---- timelock errors (ADR 0023) ----
+
+    /// @notice A config function was called outside a signed-path execution (ADR 0007, ADR 0023).
+    error NotSignedPath(ExecutionPath active);
+    error NotGuardian(address caller);
+    /// @notice A guardian must be non-zero and not the guard itself (ADR 0023, D5).
+    error InvalidGuardian(address guardian);
+    error ItemNotQueued(bytes32 id, ItemStatus status);
+    error WrongItemKind(bytes32 id, ItemKind expected, ItemKind actual);
+    /// @notice Escape items are cancelled with `cancelEscape` (R1), not `cancel`.
+    error EscapeRequiresCancelEscape(bytes32 id);
+    error NotMatured(bytes32 id, uint64 eta);
+    error ItemExpired(bytes32 id, uint64 expiresAt);
+    error NotExpiredYet(bytes32 id, uint64 expiresAt);
+    /// @notice The item's key epoch is older than the key's current epoch (ADR 0023, D6).
+    error ItemSuperseded(bytes32 id, uint64 itemEpoch, uint64 currentEpoch);
+    error GuardianCannotCancel(bytes32 id, ItemKind kind);
+    error EscapeAlreadyPending(address target, bytes32 id);
+    /// @notice I4.20: the escape target isn't a guard bound to this Safe (ADR 0023).
+    error EscapeTargetNotBound(address target, address reportedSafe);
+    error EscapeCodehashMismatch(address target, bytes32 expected, bytes32 actual);
+    /// @notice setGuard(x) before the module guard slot equals x (ADR 0014).
+    error EscapeOrderViolation(address target, address moduleGuard);
 
     /// @notice A signed transaction set a gas refund field (ADR 0010).
     error RefundNotAllowed(uint256 gasPrice, address gasToken, address refundReceiver);
@@ -127,4 +190,44 @@ interface ISafeFirewallGuard is ITransactionGuard, IModuleGuard {
 
     /// @notice Permit2, which is never an allowed spender (ADR 0004).
     function PERMIT2() external view returns (address);
+
+    // ---- timelock (ADR 0002, 0008, 0011, 0014, 0023) ----
+
+    /// @notice Queue guard removal (`target == 0`) or replacement. Signed path, R1 (ADR 0014).
+    function queueEscape(address target, bytes32 codehash) external returns (bytes32 id);
+
+    /// @notice Cancel an escape item. Signed path, R1 (ADR 0008, 0014).
+    function cancelEscape(bytes32 id) external;
+
+    /// @notice Queue a guardian replacement (48h). Signed path. The guardian can't cancel it.
+    function queueGuardianChange(address newGuardian) external returns (bytes32 id);
+
+    /// @notice Execute a matured guardian change. Signed path only (ADR 0023, D2).
+    function executeGuardianChange(bytes32 id) external;
+
+    /// @notice Cancel any non-escape item. Signed path.
+    function cancel(bytes32 id) external;
+
+    /// @notice Cancel an item. Callable only by the guardian, directly. Not escape or guardian-change items.
+    function guardianCancel(bytes32 id) external;
+
+    /// @notice Mark an item expired. Anyone; only after expiry; a no-op if already expired (ADR 0023, D4).
+    function markExpired(bytes32 id) external;
+
+    function guardian() external view returns (address);
+
+    function getItem(bytes32 id) external view returns (Item memory);
+
+    function keyEpoch(bytes32 key) external view returns (uint64);
+
+    /// @notice The pending escape item for `target`, or zero.
+    function pendingEscape(address target) external view returns (bytes32);
+
+    function ESCAPE_DELAY() external view returns (uint256);
+
+    function CONFIG_DELAY() external view returns (uint256);
+
+    function GUARDIAN_DELAY() external view returns (uint256);
+
+    function EXPIRY_WINDOW() external view returns (uint256);
 }

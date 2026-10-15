@@ -62,6 +62,8 @@ abstract contract FirewallTestBase is Test {
     mapping(address owner => uint256 key) internal ownerKey;
     TestModule internal module;
     SafeFirewallGuardHarness internal guard;
+    /// @dev Cancel-only guardian (ADR 0008). Set before the guard is built, so `_config()` can stay `view`.
+    address internal guardianAddr;
 
     /// @notice Supplies the Safe singleton, proxy factory and canonical addresses for this variant.
     ///         Returns a zero struct when the variant is skipped.
@@ -71,6 +73,7 @@ abstract contract FirewallTestBase is Test {
         infra = _deploySafe();
         if (infra.singleton == address(0)) return; // variant skipped
 
+        guardianAddr = _eoa("guardian");
         _createOwners();
         safe = _createSafe();
         vm.deal(address(safe), SAFE_STARTING_BALANCE);
@@ -105,7 +108,8 @@ abstract contract FirewallTestBase is Test {
             safe: address(safe),
             singleton: infra.singleton,
             multiSendCallOnly: infra.multiSendCallOnly,
-            permit2: infra.permit2
+            permit2: infra.permit2,
+            guardian: guardianAddr
         });
     }
 

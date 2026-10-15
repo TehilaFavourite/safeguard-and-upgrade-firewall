@@ -44,6 +44,10 @@ abstract contract ConstructionTest is FirewallTestBase {
         new SafeFirewallGuard(cfg);
     }
 
+    function test_Constructor_StoresGuardian() public view {
+        assertEq(guard.guardian(), guardianAddr);
+    }
+
     function test_Constructor_RevertsOnZeroMultiSendCallOnly() public {
         ISafeFirewallGuard.FirewallConfig memory cfg = _config();
         cfg.multiSendCallOnly = address(0);

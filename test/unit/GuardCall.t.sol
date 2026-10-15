@@ -3,6 +3,7 @@ pragma solidity 0.8.28;
 
 import {ITransactionGuard} from "safe-smart-account/contracts/base/GuardManager.sol";
 import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
+import {IERC165} from "safe-smart-account/contracts/interfaces/IERC165.sol";
 import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
 
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
@@ -10,10 +11,30 @@ import {FirewallTestBase} from "../base/FirewallTestBase.sol";
 import {LocalSafe} from "../base/LocalSafe.t.sol";
 import {FeatureForkSafe} from "../base/ForkSafe.t.sol";
 
-/// @notice I1.12: in Phase 1 every top-level call with `to == GUARD` reverts, because no config or
-///         escape selectors exist yet (ADR 0018). Batch inner calls are covered in Phase 3.
-///         I1.11: anything else passes the Phase 1 skeleton (scaffolding only).
+/// @notice I1.12 / I4.19: a top-level call with `to == GUARD` reverts unless its selector is on the
+///         closed list of guard functions the Safe may call (ADR 0018). Batch inner calls are covered in
+///         BatchPolicy.t.sol, module calls below. I1.11: anything else passes until the allowlist
+///         (scaffolding only).
 abstract contract GuardCallTest is FirewallTestBase {
+    /// @dev The closed list (I4.19, ADR 0023): the only guard selectors a signed Safe call may target.
+    function _permitted() internal pure returns (bytes4[5] memory) {
+        return [
+            ISafeFirewallGuard.queueEscape.selector,
+            ISafeFirewallGuard.cancelEscape.selector,
+            ISafeFirewallGuard.queueGuardianChange.selector,
+            ISafeFirewallGuard.executeGuardianChange.selector,
+            ISafeFirewallGuard.cancel.selector
+        ];
+    }
+
+    function _isPermitted(bytes4 sel) internal pure returns (bool) {
+        bytes4[5] memory p = _permitted();
+        for (uint256 i = 0; i < p.length; i++) {
+            if (p[i] == sel) return true;
+        }
+        return false;
+    }
+
     function _rejection(bytes4 selector) internal pure returns (bytes memory) {
         return abi.encodeWithSelector(ISafeFirewallGuard.GuardCallRejected.selector, selector);
     }
@@ -36,7 +57,7 @@ abstract contract GuardCallTest is FirewallTestBase {
     }
 
     function testFuzz_GuardCall_SignedAnySelectorReverts(bytes calldata data) public {
-        vm.assume(data.length >= 4);
+        vm.assume(data.length >= 4 && !_isPermitted(bytes4(data[:4])));
         _execSignedExpectRevert(address(guard), 0, data, Enum.Operation.Call, _rejection(bytes4(data[:4])));
     }
 
@@ -49,6 +70,58 @@ abstract contract GuardCallTest is FirewallTestBase {
         // forge-lint: disable-next-line(unsafe-typecast)
         bytes memory expected = _rejection(bytes4(data)); // intended: the first 4 bytes are the selector
         _execSignedExpectRevert(address(guard), 0, data, Enum.Operation.DelegateCall, expected);
+    }
+
+    // ---------------------------------------------------------------- I4.19 the closed list
+
+    /// @dev Every other guard function, including all hooks, the guardian's and the views, is rejected
+    ///      when the Safe targets it.
+    function test_GuardCall_NonPermittedGuardFunctionsRejected() public {
+        bytes4[10] memory rejected = [
+            ITransactionGuard.checkTransaction.selector,
+            ITransactionGuard.checkAfterExecution.selector,
+            IModuleGuard.checkModuleTransaction.selector,
+            IModuleGuard.checkAfterModuleExecution.selector,
+            ISafeFirewallGuard.guardianCancel.selector,
+            ISafeFirewallGuard.markExpired.selector,
+            ISafeFirewallGuard.guardian.selector,
+            ISafeFirewallGuard.getItem.selector,
+            ISafeFirewallGuard.SAFE.selector,
+            IERC165.supportsInterface.selector
+        ];
+        for (uint256 i = 0; i < rejected.length; i++) {
+            assertFalse(_isPermitted(rejected[i]), "a hook or non-Safe function is on the permitted list");
+            _execSignedExpectRevert(
+                address(guard),
+                0,
+                abi.encodePacked(rejected[i], bytes32(0)),
+                Enum.Operation.Call,
+                abi.encodeWithSelector(ISafeFirewallGuard.GuardCallRejected.selector, rejected[i])
+            );
+        }
+    }
+
+    /// @dev Permitted selectors pass step 7. Their own checks run next, so the revert, if any, is not
+    ///      GuardCallRejected. `cancel` of an unknown id is used as the probe.
+    function test_GuardCall_PermittedSelectorPassesStep7() public {
+        _execSignedExpectRevert(
+            address(guard),
+            0,
+            abi.encodeCall(ISafeFirewallGuard.cancel, (bytes32(uint256(1)))),
+            Enum.Operation.Call,
+            abi.encodeWithSelector(
+                ISafeFirewallGuard.ItemNotQueued.selector, bytes32(uint256(1)), ISafeFirewallGuard.ItemStatus.NONE
+            )
+        );
+    }
+
+    /// @dev On the module path, even permitted selectors are rejected (ADR 0014).
+    function test_GuardCall_ModulePathRejectsPermittedSelectors() public {
+        bytes4[5] memory p = _permitted();
+        for (uint256 i = 0; i < p.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(ISafeFirewallGuard.GuardCallRejected.selector, p[i]));
+            module.exec(safe, address(guard), 0, abi.encodePacked(p[i], bytes32(0)), Enum.Operation.Call);
+        }
     }
 
     // ---------------------------------------------------------------- I1.12 module path

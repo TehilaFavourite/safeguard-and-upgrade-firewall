@@ -153,3 +153,48 @@ contract StateWritingLyingSingleton is LyingSingleton {
         return ORIGINALS.owners();
     }
 }
+
+/// @notice An escape target whose answers can change while its code (and so its codehash) stays the
+///         same. Used to test the execute-time I4.20 re-check on its own (ADR 0023).
+contract MutableBindingGuard {
+    address public SAFE;
+    bool public supportsBoth = true;
+
+    constructor(address safe_) {
+        SAFE = safe_;
+    }
+
+    function setSafe(address safe_) external {
+        SAFE = safe_;
+    }
+
+    function setSupportsBoth(bool v) external {
+        supportsBoth = v;
+    }
+
+    function supportsInterface(bytes4) external view returns (bool) {
+        return supportsBoth;
+    }
+}
+
+/// @notice An escape target that passes the firewall's I4.20 checks but, when `refuseSafe` is set,
+///         tells the Safe it is not a guard. The Safe's `setGuard` then reverts GS300
+///         (GuardManager.sol:72), so `execTransaction` with a non-zero safeTxGas returns
+///         success == false (Safe.sol:180-186). Used to test that a failed escape execution does
+///         not consume its item (ADR 0023, D7).
+contract SafeRefusingGuard {
+    address public immutable SAFE;
+    bool public refuseSafe;
+
+    constructor(address safe_) {
+        SAFE = safe_;
+    }
+
+    function setRefuseSafe(bool v) external {
+        refuseSafe = v;
+    }
+
+    function supportsInterface(bytes4) external view returns (bool) {
+        return !(refuseSafe && msg.sender == SAFE);
+    }
+}
