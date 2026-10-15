@@ -54,6 +54,16 @@ malformed return data from `x` are reported with `reportedSafe = address(0)`.
   documents this.
 - **The calls to `x` are STATICCALLs.** `script/check-guard-opcodes.sh` must still report zero
   CALL, DELEGATECALL or CALLCODE.
+- **Decoding each answer:** check success, then returndata length ≥ 32, then decode one word. A
+  `SAFE()` word with non-zero high 96 bits counts as `reportedSafe = address(0)`. A
+  `supportsInterface` answer counts as true only if the word is exactly 1. Any failure reverts with
+  `EscapeTargetNotBound`.
+- **Accepted: a hostile target can waste gas,** for example by returning oversized returndata
+  (Solidity's `staticcall` copies all of it into memory) or by burning gas inside `SAFE()`. This is
+  accepted because only the signers choose the target, and a failure fails closed: the item can't
+  be queued, or can't execute. Removal stays available as the fallback.
+- **Removal binds no code.** `queueEscape(0, c)` with `c != 0` reverts with
+  `EscapeCodehashMismatch(0, c, 0)`, so one removal has exactly one encoding.
 
 ## Consequences for R1 (amends ADR 0014's dependency list)
 

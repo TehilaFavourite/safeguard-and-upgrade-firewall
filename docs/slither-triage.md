@@ -26,3 +26,16 @@ high, medium or low findings.
 |---|---|---|---|---|
 | 11 | `uninitialized-local` | `MultiSendDecoder.decode`: `count` | **Fixed** | Solidity zero-initializes locals, so this wasn't a bug. `count` and `pos` are now initialized explicitly for clarity. |
 | 12 | `assembly` | `MemoryReader._load` | Accepted | The approved second assembly exception (ADR 0005; engineering principles). Read-only: one `mload` after an overflow-safe bounds check, no `mstore`, marked `memory-safe`, 100% covered and fuzzed against a byte-by-byte reference. |
+
+## Phase 4 (2026-10-15, Slither 0.11.6)
+
+26 contracts analyzed with 102 detectors: **21 results**, all informational. No high, medium or
+low findings. The 11 from Phase 3 are unchanged (#1-10 and #12 above, same reasons). There are 10
+Phase 4 findings, all triaged.
+
+| # | Detector | Location | Status | Reason |
+|---|---|---|---|---|
+| 13-16 | `timestamp` | `queueEscape`, `markExpired`, `_requireExecutable`, `_isLive` | Accepted | The timelock is defined in wall-clock time (ADR 0011). The delays are 48h, 72h and 14 days. A proposer can shift `block.timestamp` by seconds at most, which is negligible at that scale. The boundaries (`eta`, `expiresAt`) are tested at ±1 s. |
+| 17 | `dead-code` | `SafeFirewallGuard._advanceKeyEpoch` | Accepted | The Phase 7 and 8 power-reducing changes call it (ADR 0023, D6). Until then only the test harness reaches it. It is `internal`, so it has no external entry point. |
+| 18 | `low-level-calls` | `SafeFirewallGuard._staticWord` | Accepted | The I4.20 binding reads (ADR 0023): `staticcall` only, with success, length and decode checked explicitly, and every failure reported as `EscapeTargetNotBound`. A high-level call would revert with the target's own data and couldn't be checked against length. `check-guard-opcodes.sh` confirms there are 0 CALL, DELEGATECALL or CALLCODE. |
+| 19-22 | `naming-convention` | `ISafeFirewallGuard.ESCAPE_DELAY()`, `CONFIG_DELAY()`, `GUARDIAN_DELAY()`, `EXPIRY_WINDOW()` | Accepted | Getters for the constants, named to match (as #5-8). |
