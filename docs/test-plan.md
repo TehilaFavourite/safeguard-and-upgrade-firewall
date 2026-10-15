@@ -134,22 +134,43 @@ Principle (ADR 0003): one accepted encoding per batch.
   - the three "only known errors" fuzzers, which a never-rejecting stub passes trivially. They guard the real decoder against a Panic or out-of-gas.
 - A first run of `WellFormedTransfersPass` failed on the fork only. `makeAddr("alice")` has EIP-7702 delegation code on mainnet that forwards ETH. Fixed with the `_eoa(label)` fixture helper (namespaced label, must have no code).
 
-## Phase 4: timelock, config, escape path, guardian
+## Phase 4: timelock, escape path, guardian (ADR 0023)
 
-| ID | Requirement | Source | Tests |
-|---|---|---|---|
-| T1 | Queue → execute after delay; expiry 14 days after ETA | spec Config; ADR 0011 | `test_Timelock_ExecuteBeforeEtaReverts`, `test_Timelock_ExecuteAtEtaSucceeds`, `test_Timelock_ExecuteAfterExpiryReverts`, `test_Timelock_ExecuteTwiceReverts`, `test_Timelock_CancelledItemCannotExecute`, `testFuzz_Timelock_EtaAndExpiryBoundaries` |
-| T2 | Delay classes and immutability | ADR 0011 | `test_Delays_ConfigIs48h`, `test_Delays_EscapeIs72h`, `test_Delays_GuardianChangeIs48h`, `test_Delays_NoSetterExists` |
-| T3 | Config calls: signed path only | ADR 0007, 0014 | `test_ModulePath_QueueRejected`, `test_ModulePath_ExecuteRejected`, `test_ModulePath_CancelRejected`, `test_Config_DirectCallFromNonSafeReverts` |
-| T4 | R1 escape shape (ADR 0014) | ADR 0014 | `test_Escape_QueueEscapeFastPathed`, `test_Escape_InsideBatchNotFastPathed`, `test_Escape_WithValueNotFastPathed`, `test_Escape_DelegatecallNotFastPathed`, `test_Escape_SetGuardWithoutMaturedItemReverts`, `test_Escape_SetGuardToDifferentAddressReverts`, `test_Escape_ExpiredItemReverts`, `test_Escape_ReplacementCodehashMismatchReverts`, `test_Escape_ReplacementWithoutCodeReverts`, `test_Escape_ReplacementDeployedByThirdPartyAccepted` |
-| T5 | R1 survives a broken policy | threat model R1 | `test_Escape_QueueAndExecuteSucceedWhenPolicyAlwaysReverts`. A test-only subclass makes the pipeline revert on everything |
-| T6 | R1 rejected on the module path | ADR 0014 | `test_ModulePath_QueueEscapeRejected`, `test_ModulePath_SetGuardWithMaturedItemRejected` |
-| T7 | R1 fast return clears transient state | ADR 0014 | `test_Escape_FastReturnClearsTransientState` |
-| T8 | Replacement order enforced: `setModuleGuard(x)` then `setGuard(x)` | ADR 0014 | `test_Escape_SetModuleGuardThenSetGuardSucceeds`, `test_Escape_SetGuardBeforeModuleGuardReverts`, `test_Escape_SetGuardWithModuleGuardNotXReverts`, `test_Escape_ItemMarkedUsedOnSetGuard`, `test_Escape_UsedItemCannotBeReplayed`, `test_Escape_NoUnguardedWindowDuringReplacement`, `test_Escape_CancelAfterModuleGuardStepLeavesModuleGuardX` |
-| T9 | Guardian cancel rights | ADR 0008 | `test_Guardian_CancelsConfigItem`, `test_Guardian_CannotCancelEscapeItem`, `test_Guardian_CannotCancelGuardianRemoval`, `test_Guardian_CannotQueue`, `test_Guardian_CannotExecute`, `test_Guardian_NonGuardianCannotCancel` |
-| T10 | Signers can cancel everything, including escape items | ADR 0008 | `test_SignerCancel_CancelsEscapeItemViaR1`, `test_SignerCancel_CancelsGuardianRemoval` |
-| T11 | Power-reducing change cancels pending power-adding changes for the same key | spec Opposite pending; ADR 0011, 0012 | `test_P1_CapLowerCancelsPendingRaise`, `test_P1_WithdrawalRaiseCancelsPendingLowering`, `test_P1_OtherKeysUnaffected` |
-| T12 | Events for queue, execute, cancel and expiry | engineering standard | `test_Events_Queued`, `test_Events_Executed`, `test_Events_Cancelled`, `test_Events_CancelledByGuardian`, `test_Events_Expired` |
+All suites run in both variants. CONFIG items are queued through the test harness, because their
+executors arrive in Phases 6-7. The guardian change is the real end-to-end executor.
+
+| ID | Requirement | Tests |
+|---|---|---|
+| I4.1 | Only the Safe on the signed path queues | `testFuzz_Queue_DirectCallFromNonSafeReverts`, `test_Queue_SafeOutsideSignedExecutionReverts` (`NotSignedPath(NONE)`), `test_Queue_ModulePathRejected` |
+| I4.2 | ETA = queue time + class delay; immutable constants | `test_Delays_Constants`, `test_Queue_GuardianChangeEtaAndEvent`, `test_Queue_ConfigItemUsesConfigDelay`, `test_Escape_QueueSetsEta72hAndPending` |
+| I4.3 | Executable only while `eta <= now < eta + 14d` | `testFuzz_Timelock_MaturityAndExpiryBoundaries`, `test_Timelock_ExactBoundaries`, `test_Escape_BeforeDelayReverts`, `test_Escape_AfterExpiryReverts` |
+| I4.4 | At most once; re-queue gets a new id (D1) | `test_Timelock_ExecuteTwiceReverts`, `test_Timelock_CancelledItemCannotExecute`, `test_Timelock_ReQueueAfterCancelGetsNewId`, `test_Timelock_ExpiredCannotExecuteEvenIfNotMarked`, `test_Escape_OnePendingPerTarget` |
+| I4.5 | Events for queue, execute, cancel and expiry | `test_Queue_GuardianChangeEtaAndEvent`, `test_Events_ExecutedAndCancelled`, `test_MarkExpired_AnyoneAfterExpiryAndIdempotent` |
+| D4 | `markExpired`: only after expiry, idempotent | `test_MarkExpired_BeforeExpiryReverts`, `test_MarkExpired_AnyoneAfterExpiryAndIdempotent`, `test_MarkExpired_ExecutedItemReverts` |
+| I4.6 | R1 only for exact shapes | `test_Escape_QueueInsideBatchRejected`, `test_Escape_QueueAsDelegatecallRejected`, `test_Escape_QueueWithValueRejected`, `test_Escape_QueueWithRefundFieldRejected` |
+| I4.7 | Codehash bound at queue and at execute | `test_Escape_CodehashMismatchAtQueueReverts`, `test_Escape_CodehashChangedBeforeExecuteReverts`, `test_Escape_ReplacementDeployedByThirdPartyAccepted` |
+| I4.8 | `setModuleGuard(x)` before `setGuard(x)` | `test_Escape_SetGuardBeforeModuleGuardReverts`, `test_Escape_ReplacementSucceedsAfterDelay`, `test_Escape_RemovalSucceedsAfterDelay` |
+| I4.9 | R1 independent of policy, the module limit and the expected singleton | `test_Escape_WorksWhenPolicyAlwaysReverts`, `test_Escape_CancelWorksWhenPolicyAlwaysReverts`, `test_Escape_WorksOverModuleLimitAndWithUnexpectedSingleton` |
+| I4.10 | The R1 marker doesn't leak | `test_Escape_FastReturnMarkerDoesNotLeak` |
+| I4.11 | Consumed only on `success == true` (D7) | `test_Escape_NotConsumedWhenSetGuardFails` |
+| I4.12 | The module path can't queue, cancel or execute escape items | `test_Escape_ModulePathCannotQueue`, `test_Escape_ModulePathCannotExecuteMaturedItem`, `test_GuardCall_ModulePathRejectsPermittedSelectors` |
+| I4.13 | Escape-shaped batch entries get no fast path | `test_Escape_ShapedInnerBatchEntryGetsNoFastPath`, `test_Escape_QueueInsideBatchRejected` |
+| I4.14 | The guardian can only cancel | `test_Guardian_CancelsConfigItem`, `testFuzz_Guardian_NonGuardianCannotCancel`, `test_Guardian_CannotQueueOrExecute` |
+| I4.15 | The guardian can't cancel escape or guardian-change items | `test_Guardian_CannotCancelEscapeItem`, `test_Guardian_CannotCancelGuardianChange` |
+| I4.16 | Signers cancel everything; escape through R1 | `test_Escape_SignersCancelEscape`, `test_Escape_CancelRequiresCancelEscape`, `test_Signers_CancelGuardianChange`, `test_Signers_CancelConfigItem` |
+| I4.17 | Guardian replacement (48h); the old guardian loses rights immediately | `test_GuardianChange_OldGuardianLosesRightsImmediately`, `testFuzz_GuardianChange_DirectExecuteReverts` (D2), `test_GuardianChange_WrongKindRejected` |
+| D5 | Guardian required, not the guard itself, replace-only | `test_Guardian_StoredAtConstruction`, `test_Guardian_ZeroRejectedAtConstruction`, `test_Guardian_SelfRejectedAtConstruction`, `test_GuardianChange_ZeroRejected`, `test_GuardianChange_SelfRejected`, `test_Constructor_StoresGuardian` |
+| I4.18 | Key epochs supersede pending items for that key only (D6) | `test_KeyEpoch_AdvanceSupersedesPendingItemsForThatKeyOnly`. Real reductions are wired in Phases 7 and 8 |
+| I4.19 | The closed list of Safe-callable guard selectors | `test_GuardCall_NonPermittedGuardFunctionsRejected`, `test_GuardCall_PermittedSelectorPassesStep7`, `testFuzz_GuardCall_SignedAnySelectorReverts` (excludes the 5 permitted) |
+| **I4.20** | **The escape target is bound to this Safe**, at queue and at execute; removal always works | `test_Escape_TargetBoundToOtherSafeRejectedAtQueue`, `test_Escape_TargetWithoutGuardInterfacesRejectedAtQueue`, `test_Escape_TargetWithoutCodeRejectedAtQueue`, `test_Escape_TargetStopsMatchingRejectedAtExecute`, `test_Escape_RemovalSucceedsAfterDelay`. Documented exception: `test_Escape_WrongExpectedSingletonReplacementIsRecoverable` |
+
+**Phase 4 red check** (2026-10-15, Phase 3 code plus compile-only stubs, optimizer on, both
+variants): 170 tests.
+- **114 failed**, every Phase 4 property.
+- **56 passed**: the Phase 1-3 regressions in `Construction` and `GuardCall`, and the near-miss
+  rejections that already hold because Phase 3 rejects every call to GUARD (escape queuing through
+  a batch, a delegatecall, value or a refund field; the module path; non-permitted selectors). They
+  make sure Phase 4 doesn't widen those.
 
 ## Phase 5: self-call policy and module parity
 

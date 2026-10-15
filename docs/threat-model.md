@@ -50,6 +50,17 @@ timelock delay, because the escape route goes through it.
   rejected (ADR 0014). The post-check matters
   because the *old* guard's post-check runs on the removal transaction (address cached at
   `Safe.sol:149`).
+- **I4.20 (critical): an escape target must be bound to this Safe.** If a replacement guard bound
+  to a *different* Safe were installed, every transaction, escape and cancellation included, would
+  revert with `NotSafe`. That is a **permanent freeze**. Rules (ADR 0023):
+  - at `queueEscape` **and** at escape execution, for `x != 0`: a STATICCALL to `x.SAFE()` must
+    return this Safe, and `x.supportsInterface` must return true for both guard interfaces.
+    Otherwise the call reverts with `EscapeTargetNotBound(x, reportedSafe)`;
+  - removal (`x == 0`) is always allowed;
+  - **v1 replacements must be this guard type, or removal.**
+
+  A replacement with a wrong `expectedSingleton` is **not** rejected. It fails closed in a
+  recoverable way: its R1 and R2 still work, because they run before its step-8 check.
 - **R2 (cancellation always passes).** A top-level `Call` to the Safe itself always passes if it
   has:
   - `value == 0` and empty data;

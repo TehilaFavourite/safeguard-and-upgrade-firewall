@@ -102,7 +102,9 @@ bot/                           alert bot (Phase 12)
   - Module-path parity: the same pipeline and shared counters; modules can't queue or cancel.
 - **6. Target/selector allowlist** with parameter constraints (for example fixed recipients),
   deny by default (P2).
-- **7. Outflows.**
+- **7. Outflows.** Incident response must stay a single call without batching (ADR 0023, D3), so
+  the guard needs multi-key power-reducing functions, for example `lowerCaps(tokens[], caps[])`.
+  Each reduction advances the key epoch (ADR 0023, D6).
   - ETH and ERC-20 transfers.
   - Approvals: counted in full; unlimited approvals rejected; exact revocations always pass;
     `setApprovalForAll` hard reject; Permit2 never allowlisted.
