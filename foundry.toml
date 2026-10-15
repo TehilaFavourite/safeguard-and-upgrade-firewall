@@ -6,6 +6,10 @@ libs = ["lib"]
 # `transient` state variables need solc >= 0.8.28; tstore/tload via assembly needs >= 0.8.24.
 solc_version = "0.8.28"
 evm_version = "cancun"
+# Optimizer ON, 200 runs (ADR 0022): size is the binding constraint, because GuardFactory embeds the
+# guard's init code under EIP-170.
+optimizer = true
+optimizer_runs = 200
 
 [rpc_endpoints]
 # Read from .env (git-ignored). Never commit the URL.
