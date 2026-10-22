@@ -20,7 +20,8 @@ backlog. No open-ended design rounds.
 
 ## Engineering standard
 
-- **Compiler:** Solidity 0.8.28, EVM `cancun` (`foundry.toml`).
+- **Compiler:** Solidity 0.8.28, EVM `cancun` (`foundry.toml`). **Test tool:** forge `v1.8.5`,
+  pinned exactly, locally and in CI (ADR 0022).
 - **Transient state:** use typed `transient` variables.
 - **Inline assembly is allowed in exactly two places in `src/`**, listed by name (ADR 0005). Both
   keep reads and writes to the minimum, have 100% line and branch coverage, and are fuzzed.
@@ -54,10 +55,12 @@ backlog. No open-ended design rounds.
   where possible.
 - **Tooling gates:**
   - `forge fmt` clean;
-  - Slither run on `src/`, with every finding fixed or triaged in `docs/slither-triage.md`;
+  - Slither run on `src/`, with every finding fixed or triaged in `docs/slither-triage.md` and
+    listed in `script/slither-accepted.txt` (`script/check-slither.sh` fails on anything else);
   - coverage on `src/`: 100% lines and at least 95% branches, with every uncovered branch
     explained;
-  - a `forge snapshot` committed, so gas changes are visible in review.
+  - a gas snapshot committed (`script/gas-snapshot.sh`), so gas changes are visible in review;
+  - **green CI on both jobs** (`unit` and `fork`, ADR 0013) before a phase is done.
 
 ## Workflow per phase
 
@@ -77,8 +80,11 @@ backlog. No open-ended design rounds.
      exceeds 22,000 B, or `GuardFactory` exceeds EIP-170's 24,576 B. The factory embeds the guard's
      init code, so it hits the limit first;
    - `script/check-seam-overrides.sh` and `script/check-guard-opcodes.sh`;
-   - `forge snapshot` (diff against the previous phase);
-   - Slither, with findings triaged in `docs/slither-triage.md`.
+   - `script/gas-snapshot.sh --diff` (against the previous phase), then `script/gas-snapshot.sh` to
+     update;
+   - `script/check-slither.sh`, with findings triaged in `docs/slither-triage.md` and
+     `script/slither-accepted.txt`;
+   - green CI on both jobs after the maintainer pushes.
 
    Report the results as they are, including failures.
 5. **Summary.** A five-line summary, any decisions that came up, and the proposed commits.

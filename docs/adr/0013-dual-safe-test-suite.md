@@ -86,15 +86,20 @@ test runs against both.
 
   Fuzz depth comes from the unit variant. The fork variant's job is to confirm the same behaviour
   against production bytecode.
-- **CI: two jobs** (owner, 2026-10-14):
+- **CI: two jobs** (owner, 2026-10-14; brought forward from Phase 13 on 2026-10-22, so that every
+  remaining phase lands on green CI):
 
-  | Job | Command | When | Secrets |
+  | Workflow | Runs | When | Secrets |
   |---|---|---|---|
-  | Unit | `forge test --no-match-contract 'ForkTest\|ForkInfra'`, parallel | every push | none |
-  | Fork | `forge test -j 1 --match-contract 'ForkTest\|ForkInfra'`, with `ETH_RPC_URL` | PRs to `main`, and nightly | `ETH_RPC_URL` |
+  | `.github/workflows/unit.yml` | fmt, build, unit-variant tests in parallel (`--no-match-contract 'ForkTest\|ForkInfra'`), the coverage, size, opcode and seam gates, `script/gas-snapshot.sh --check`, `script/check-slither.sh` | every push and PR | none |
+  | `.github/workflows/fork.yml` | `forge test -j 1 --match-contract 'ForkTest\|ForkInfra'` | PRs to `main`, nightly, manual | `ETH_RPC_URL` |
 
-  Without the secret, fork tests skip visibly (`vm.skip`) and never silently pass. Locally, use
-  `forge test -j 1` whenever the fork variant runs.
+  - **The fork job fails without the secret,** and fails if any fork test is skipped. Locally, fork
+    tests still skip visibly (`vm.skip`) when there is no RPC; in the fork job, a skipped suite
+    can never show green.
+  - **Pinned:** forge `v1.8.5` (asserted in a step), every action by commit SHA, the runner image,
+    and Slither `0.11.6` with crytic-compile `0.4.2` (ADR 0022).
+  - Locally, use `forge test -j 1` whenever the fork variant runs.
 
 ## Pinned addresses (owner, 2026-10-14)
 

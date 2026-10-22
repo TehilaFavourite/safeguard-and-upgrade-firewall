@@ -2,7 +2,11 @@
 
 Command: `slither . --filter-paths 'lib/|test/|script/' --exclude-dependencies`.
 
-Every finding is either fixed or triaged here, with a reason.
+Every finding is either fixed or triaged here, with a reason. Each triaged finding is also listed in
+`script/slither-accepted.txt`, keyed by detector and contract member (not by line).
+`script/check-slither.sh` (run in CI) fails on any finding missing from that list, and on any list
+entry Slither no longer reports. Slither rates `timestamp` as Low, so a plain `--fail-low` would
+fail on the accepted #13-16; the list-based gate is exact instead.
 
 ## Phase 2 (2026-10-14, Slither 0.11.6)
 

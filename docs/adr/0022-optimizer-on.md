@@ -92,6 +92,49 @@ under EIP-170. Gas per transaction is cents either way.
 - **Regardless of compiler settings,** the Phase 7 transient map is fuzzed against a plain reference
   implementation (a storage-backed mapping and array) for every operation.
 
+### Test toolchain: forge pinned at v1.8.5 (owner, 2026-10-22)
+
+**forge 1.8.5 locally and in CI, pinned exactly, never `stable` or `latest`.**
+
+- **Why.** CI installed whatever forge was stable (`foundry-toolchain@v1` with no version), while
+  local runs used 1.5.1. Forge 1.8.5 treats each top-level test call as its own transaction. It
+  resets transient storage between those calls and charges intrinsic gas (about 21,000) for each.
+  `test_PostHook_PathMismatchReverts` relied on transient state carrying over between two pranked
+  calls, so it failed in CI only. It was rewritten to produce the mismatch inside one real
+  execution (a module transaction that delegatecalls a forwarder into the signed post-hook, on
+  `PostCheckOnlyGuard`). Transient storage is per transaction by definition, so no test may rely on
+  how forge handles it between top-level calls.
+- **Forge is the test tool; solc produces the bytecode.** Bytecode hashes (`forge inspect <C>
+  bytecode|deployedBytecode | cast keccak`) were recorded before and after the upgrade, on the same
+  commit (`e138bfd`). They are identical:
+
+  | Contract | Init code (`bytecode`) | Runtime (`deployedBytecode`) |
+  |---|---|---|
+  | `SafeFirewallGuard` | `0xb2d3eea9c048446dad6791a9e9dfd63c96eaabb5482895674c1b63126b2b8264` | `0xc33f31eab444e03fcbb08d8161af2b84c42e58f73b137f4284f2f36141fa6056` |
+  | `GuardFactory` | `0xb2f938e1bd997d776650a213ddce0efb5afc535081ac649e4c424a12a9b341d8` | `0x736b2531c99c15af510c550a3a57c62cc2b7aa140a40143274dc5eabe7067524` |
+
+  Any future forge change repeats this check: the hashes must match, or the change is a compiler
+  change and needs the known-bugs check above.
+- **Every gate re-run on 1.8.5:** unit 219/219, fork 188/188, coverage 100% (completeness gate ok),
+  fmt clean, opcode, seam and size gates ok, Slither 21 findings (all triaged).
+- **Measured gas changed, the code didn't.** Each top-level test call now includes intrinsic gas,
+  and fork tests run under the fork block's gas limit (about 57M, not 1B). So gas figures are
+  comparable only within one forge version. The snapshot was regenerated on 1.8.5 as the new
+  baseline.
+- **The snapshot gate** (`script/gas-snapshot.sh`) covers unit-variant tests that are not fuzz
+  tests. Fuzz means change with the inputs (even with a fixed seed they differed between sequential
+  and parallel runs), and fork entries would need RPC in the unit job. With this scope the snapshot
+  is deterministic and needs no secrets.
+- **The 1.5.1 `expectRevert("")` panic is fixed in 1.8.5.** `vm.expectRevert(bytes(""))` against
+  non-empty revert data now fails the test cleanly. Checked with a throwaway probe, which was then
+  deleted. `_execTxExpectEmptyRevert` stays: it states the intent explicitly and doesn't depend on
+  a forge version.
+- **New in 1.8.5: lint warnings at build time** (`block-timestamp`, `require-revert-in-loop`,
+  `reentrancy-events`, `encode-packed-collision`, `environment-read-across-mutation` in tests).
+  They are warnings only. They're triaged when the code they point at is next touched.
+- **CI pins every action to a commit SHA and pins the runner image (`ubuntu-24.04`)**, for the same
+  reason (ADR 0013).
+
 ## Consequences
 
 - The fork variant still runs the real mainnet Safe (built with 0.7.6, optimizer off). The unit
@@ -99,3 +142,5 @@ under EIP-170. Gas per transaction is cents either way.
   fork variant stays mandatory (ADR 0013).
 - Any change to the compiler version, the optimizer settings or `via_ir` requires this known-bugs
   check again, plus a full re-run of tests and gates.
+- Any change to the forge version requires the bytecode-hash check above, plus a full re-run of
+  tests and gates on both variants.
