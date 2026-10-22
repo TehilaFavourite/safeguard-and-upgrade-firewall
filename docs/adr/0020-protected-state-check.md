@@ -60,6 +60,9 @@ singleton can return the original values and pass a naive comparison.
    payload.
    - **Nothing in `src/` may override them.** `script/check-seam-overrides.sh` fails if anything
      does, or if either seam isn't defined exactly once. It runs in CI.
+   - **Amended by ADR 0024 (2026-10-22):** in Phase 5, `_checkOperation(to, operation, path)` widens
+     to `_checkCall(to, value, data, operation, path)`, covering the delegatecall and self-call
+     rules. The seam check follows the new name.
 
 6. **Expected singleton** (I2.23; owner, 2026-10-14).
    - The guard records an expected singleton: a constructor argument, checked during install

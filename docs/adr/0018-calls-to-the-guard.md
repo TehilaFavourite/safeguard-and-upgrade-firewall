@@ -41,3 +41,4 @@ check alone is **not** sufficient: a hook called mid-execution does see an activ
   (invariant I1.12). Batch inner calls are covered in Phase 3, module calls in Phase 5.
 - The escape path (ADR 0014) uses guard selectors (`queueEscape`, `cancelEscape`). These are on
   the permitted list and are matched before the pipeline.
+- **Amended by ADR 0024 (2026-10-22):** `queueSelfCall(bytes)` joins the permitted list (Phase 5).

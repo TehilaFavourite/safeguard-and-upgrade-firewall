@@ -47,3 +47,14 @@ but it can't be undone quickly.
 is left pending. Alternatively,
 queue a fresh escape to `x` and finish both steps. Until then, module transactions are checked by
 `x`, and signed transactions by this guard.
+
+## Timelocked owner and module changes
+
+`removeOwner`, `swapOwner` and `disableModule` take a `prev` pointer into a linked list
+(`OwnerManager.sol:73,90`, `ModuleManager.sol:142`). The item binds the exact calldata (ADR 0024).
+
+- **While a list-changing item is pending, avoid other changes to the same list.** If one executes
+  first, the pending item's `prev` can go stale. It then fails (GS205 or GS103) and stays unused,
+  and the signers have to queue a fresh one, which costs another 72h.
+- Queue list changes one at a time. Compute `prev` from the list as it will be when the item
+  executes.

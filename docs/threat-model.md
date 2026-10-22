@@ -95,6 +95,8 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
   counters.
 - Modules may never `DelegateCall`.
 - Modules may not queue or cancel config changes (signed path only, ADR 0007).
+- **Parity exceptions (ADR 0024):** modules can't make any self-call to the Safe, `disableModule`
+  included, and they get no R1 or R2 fast path. Everything else runs the same pipeline.
 - **Limitation:** module transactions need no signatures. A malicious trusted module can drain
   continuously at the cap rate until someone detects it.
 
@@ -193,6 +195,13 @@ Signers see a harmless transaction but sign attacker-chosen calldata.
   passed the 72h delay and the I4.20 binding checks, and signed transactions still get this
   guard's full pipeline. Recovery is a 72h escape back to this guard (`docs/runbook.md`).
   Prevention is v2 (`docs/v1-spec.md`).
+
+- **`disableModule` is immediate on the signed path (accepted; ADR 0016, 0024).** Disabling a
+  recovery module reduces the Safe's recovery options without a delay. It's accepted because the
+  signers approve it, and it is the fast response to a malicious module. Modules can't call it.
+- **Stale timelocked items (accepted; ADR 0024).** An owner or module change made during a pending
+  item's 72h wait can make the item's `prev` pointer stale. The item then fails at execution and
+  stays unused, so it fails closed. The cost is another 72h.
 
 ## 9. Open questions
 

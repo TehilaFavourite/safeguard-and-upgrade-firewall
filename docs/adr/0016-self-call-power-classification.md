@@ -60,3 +60,9 @@ Timelocked self-calls use the **72h escape class**, because they change control 
 - `changeThreshold`, `addOwnerWithThreshold`, `removeOwner`, `swapOwner`.
 
 Allowlist and cap changes stay at 48h (ADR 0011).
+
+## Execution, post-check and the rest (ADR 0024, 2026-10-22)
+
+How items are queued and executed, the field masks, exact verification for `disableModule`,
+rejecting every other self-call, `disableModule` being signed-path only, and `MAX_MODULES` at queue
+and at execute are all decided in ADR 0024.

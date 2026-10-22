@@ -47,12 +47,18 @@ above that) (ADR 0005).
 3. **Batch decoding:** canonical ABI wrapper, strict tiling, every `dataLength` in bounds, no
    trailing bytes, operation byte must be `0`. Normalize `to = 0` to the Safe. Empty batches are
    rejected (ADR 0003).
-4. **Self-calls** (ADR 0016):
-   - `disableModule` is immediate;
+4. **Self-calls** (ADR 0016, ADR 0024), in the `_checkCall` seam:
+   - `disableModule` is immediate on the signed path only: top-level, one per transaction. It is
+     rejected on the module path;
    - `enableModule`, `setFallbackHandler`, `changeThreshold`, `addOwnerWithThreshold`,
-     `removeOwner` and `swapOwner` are allowed only as matured timelock items;
+     `removeOwner` and `swapOwner` are allowed only as matured timelock items. The signers sign the
+     exact calldata, which is matched by `keccak256(data)`. Top-level only, consumed on success;
    - `setGuard` and `setModuleGuard` are allowed only through the escape path (ADR 0014):
      `setModuleGuard(x)` first, and `setGuard(x)` only once the module guard slot equals `x`.
+     Otherwise they are rejected at the pre-check;
+   - **every other self-call is rejected** (`SelfCallNotAllowed`): other selectors, views
+     included; 1-3 byte calldata; and any `value > 0` to `SAFE`. `SAFE` is never an allowlist
+     target.
 5. **Allowlist** (ADR 0017, 0018):
    - selector entries are (target, selector, allowValue), deny by default, and apply only when
      calldata is at least 4 bytes;
@@ -81,6 +87,9 @@ above that) (ADR 0005).
 - **Read order (ADR 0020):** the singleton is read via the proxy's `masterCopy()` and compared
   first. The other fields are read through the Safe's getters only after that.
 - **Module list:** at most `MAX_MODULES = 16`; above that, `TooManyModules`.
+- **Authorized self-calls (ADR 0024):** a matured timelocked item may change only its function's
+  fields (field mask). `disableModule` must produce exactly the pre-check module list minus that
+  module.
 - **R2 cancellation:** skips the comparison.
 - **Outflow:** if `success == true`, check the per-token totals (passed from the pre-check through
   transient storage) against the bucket level, then debit. Revert if a total exceeds the level
@@ -125,7 +134,11 @@ above that) (ADR 0005).
   - The post-check accepts a slot 0 change only to that singleton, and only while both guard slots
     point at this guard.
 - **Timelocked self-calls** (owners, threshold, `enableModule`, fallback handler) use the 72h
-  escape class (ADR 0016).
+  escape class (ADR 0016). They are queued with `queueSelfCall(data)`, which reverts unless the
+  selector is one of the seven, the length is exact, and every address word is clean (I5.16,
+  ADR 0024). One pending item per exact calldata. `enableModule` requires `count + 1 <= 16` at
+  queue and at execute. Signers and the guardian can cancel. A stale `prev` pointer makes an item
+  fail and stay unused; the signers queue a fresh one.
 - **Canonical addresses** (`MultiSendCallOnly`, `Permit2`) are constructor immutables. The deploy
   script verifies their `extcodehash` against mainnet (ADR 0013).
 
@@ -155,19 +168,20 @@ Guard + factory, install checker, alert bot, Bybit fork demo, runbook.
 
 ## Open v1 items (decide before writing tests)
 
-Phase 5 (self-call policy), raised 2026-10-15:
-- **5.1 Execution shape of a self-call item.** How the pre-check matches a matured item to the
-  signed call (by `keccak256(data)`?), one pending item per calldata, top-level only (as D3), and
-  consumption on success only (as D7).
-- **5.2 Post-check for an authorized self-call.** Either the function's field mask (other fields
-  compared), or exact after-values computed in the pre-check.
-- **5.3 Self-calls outside the ADR 0016 table** (`setup`, `simulateAndRevert`, `approveHash`,
-  `execTransaction`, views, handler-routed selectors, 1-3 byte data, value > 0 with empty data).
-- **5.4 `disableModule`:** on the module path, inside batches, and how many per transaction.
-- **5.5 `MAX_MODULES` on `enableModule`:** checked at queue only, or at queue and at execute, and
-  whether pending enable items count.
-- **5.6 Where the self-call rule sits** relative to the `_checkOperation` seam, so that the
-  post-check-only test guards stay meaningful.
+None open.
+
+Resolved 2026-10-22 (Phase 5, ADR 0024):
+- **5.1** The signers sign the exact self-call, matched by `keccak256(data)`; one pending item per
+  calldata; top-level only; consumed on success. Stale `prev` pointers are accepted (the item fails
+  and stays unused). New **I5.16**: canonical encoding at queue (selector in the table, exact ABI
+  length, clean address words).
+- **5.2** Timelocked items: field mask. `disableModule`: exact after-values.
+- **5.3** Every other self-call is rejected (`SelfCallNotAllowed`), views and `value > 0` included.
+  `SAFE` is never an allowlist target.
+- **5.4** `disableModule`: rejected on the module path (a parity exception); signed path immediate,
+  top-level only, one per transaction.
+- **5.5** `count + 1 <= 16` at queue and at execute; pending items are not counted.
+- **5.6** The seam widens to `_checkCall(to, value, data, operation, path)`.
 
 Resolved 2026-10-14 (fifth round, on-chain verification):
 - Bybit's Safe was v1.1.1 (3 of 6, nonce 71) at the pre-hack block 21,895,237; slot 0 changed in
