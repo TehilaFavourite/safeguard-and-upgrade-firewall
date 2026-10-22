@@ -31,7 +31,8 @@ jobs:
           version: v1.8.5
 
       - name: Check forge version
-        run: forge --version | tee /dev/stderr | grep -q '^forge Version: 1.8.5'
+        run: |
+          forge --version | tee /dev/stderr | grep -q '^forge Version: 1.8.5'
 
       # Without the secret, fork tests skip themselves (vm.skip). A skipped suite must never show green.
       - name: Require RPC secret

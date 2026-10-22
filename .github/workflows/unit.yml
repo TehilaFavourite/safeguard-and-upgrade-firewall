@@ -26,7 +26,8 @@ jobs:
           version: v1.8.5
 
       - name: Check forge version
-        run: forge --version | tee /dev/stderr | grep -q '^forge Version: 1.8.5'
+        run: |
+          forge --version | tee /dev/stderr | grep -q '^forge Version: 1.8.5'
 
       - name: Format
         run: forge fmt --check
