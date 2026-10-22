@@ -1,0 +1,25 @@
+# Accepted Slither findings, one per line: "<detector> <Contract.member>  # <triage id>".
+# Each entry must have a row in docs/slither-triage.md. Keys don't contain line numbers, so edits
+# that move code don't invalidate them. script/check-slither.sh fails on any finding not listed
+# here, and on any entry here that Slither no longer reports (prune it, and update the triage doc).
+dead-code SafeFirewallGuard._activePath  # 1
+naming-convention SafeFirewallGuard.SAFE  # 2-4
+naming-convention SafeFirewallGuard.MULTISEND_CALL_ONLY  # 2-4
+naming-convention SafeFirewallGuard.PERMIT2  # 2-4
+naming-convention ISafeFirewallGuard.SAFE  # 5-8
+naming-convention ISafeFirewallGuard.MULTISEND_CALL_ONLY  # 5-8
+naming-convention ISafeFirewallGuard.PERMIT2  # 5-8
+naming-convention IGuardFactory.VERSION  # 5-8
+too-many-digits GuardFactory._predict  # 9
+immutable-states SafeFirewallGuard._expectedSingleton  # 10
+assembly MemoryReader._load  # 12
+timestamp SafeFirewallGuard.queueEscape  # 13-16
+timestamp SafeFirewallGuard.markExpired  # 13-16
+timestamp SafeFirewallGuard._requireExecutable  # 13-16
+timestamp SafeFirewallGuard._isLive  # 13-16
+dead-code SafeFirewallGuard._advanceKeyEpoch  # 17
+low-level-calls SafeFirewallGuard._staticWord  # 18
+naming-convention ISafeFirewallGuard.ESCAPE_DELAY  # 19-22
+naming-convention ISafeFirewallGuard.CONFIG_DELAY  # 19-22
+naming-convention ISafeFirewallGuard.GUARDIAN_DELAY  # 19-22
+naming-convention ISafeFirewallGuard.EXPIRY_WINDOW  # 19-22

@@ -1,0 +1,53 @@
+# Fork job (ADR 0013): the same feature tests against the real mainnet v1.5.0 Safe at pinned blocks.
+# Needs the ETH_RPC_URL secret. Runs single-threaded (-j 1) because of RPC rate limits.
+name: fork
+
+permissions: {}
+
+on:
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * *" # nightly
+  workflow_dispatch:
+
+jobs:
+  fork:
+    name: fork (mainnet Safe v1.5.0)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    env:
+      ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+          submodules: recursive
+
+      # Pinned exactly (ADR 0022).
+      - uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: v1.8.5
+
+      - name: Check forge version
+        run: forge --version | tee /dev/stderr | grep -q '^forge Version: 1.8.5'
+
+      # Without the secret, fork tests skip themselves (vm.skip). A skipped suite must never show green.
+      - name: Require RPC secret
+        run: |
+          if [ -z "${ETH_RPC_URL}" ]; then
+            echo "ETH_RPC_URL secret is not set; the fork job cannot run." >&2
+            exit 1
+          fi
+
+      # One run. With RPC present, any skipped test means the fork setup misbehaved, so it fails.
+      - name: Fork tests (single-threaded, no skips)
+        run: |
+          forge test -j 1 --match-contract 'ForkTest|ForkInfra' 2>&1 | tee fork.log
+          summary=$(grep -E '^Ran [0-9]+ test suites' fork.log | tail -1)
+          echo "${summary}"
+          if ! grep -qE ', 0 skipped' <<<"${summary}"; then
+            echo "fork tests were skipped despite RPC being set" >&2
+            exit 1
+          fi
