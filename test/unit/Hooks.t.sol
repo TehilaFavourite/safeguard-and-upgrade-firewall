@@ -1,10 +1,10 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 import {ITransactionGuard} from "safe-smart-account/contracts/base/GuardManager.sol";
 import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
 import {IERC165} from "safe-smart-account/contracts/interfaces/IERC165.sol";
-import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
+import {Enum} from "../../src/interfaces/Enum.sol";
 
 import {ISafeFirewallGuard} from "../../src/interfaces/ISafeFirewallGuard.sol";
 import {FirewallTestBase} from "../base/FirewallTestBase.sol";

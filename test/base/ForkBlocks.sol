@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @notice Pinned mainnet fork blocks (ADR 0013). Every value below was read from mainnet through

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @notice The decoded Bybit hack payload (docs/bybit-incident.md §4, tx

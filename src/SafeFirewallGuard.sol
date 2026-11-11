@@ -1,13 +1,10 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {ITransactionGuard} from "safe-smart-account/contracts/base/GuardManager.sol";
-import {IModuleGuard} from "safe-smart-account/contracts/base/ModuleManager.sol";
-import {IERC165} from "safe-smart-account/contracts/interfaces/IERC165.sol";
-import {IGuardManager} from "safe-smart-account/contracts/interfaces/IGuardManager.sol";
-import {IModuleManager} from "safe-smart-account/contracts/interfaces/IModuleManager.sol";
-import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
-
+import {Enum} from "./interfaces/Enum.sol";
+import {IERC165} from "./interfaces/IERC165.sol";
+import {ISafe} from "./interfaces/ISafe.sol";
+import {ITransactionGuard, IModuleGuard} from "./interfaces/ISafeGuards.sol";
 import {ISafeFirewallGuard} from "./interfaces/ISafeFirewallGuard.sol";
 import {SafeSlots} from "./libraries/SafeSlots.sol";
 import {MultiSendDecoder} from "./libraries/MultiSendDecoder.sol";
@@ -448,8 +445,8 @@ contract SafeFirewallGuard is ISafeFirewallGuard {
                 || (selector == this.cancelEscape.selector && data.length == ONE_ARG_CALLDATA);
         }
         if (to != SAFE || data.length != ONE_ARG_CALLDATA) return false;
-        bool isSetGuard = selector == IGuardManager.setGuard.selector;
-        if (!isSetGuard && selector != IModuleManager.setModuleGuard.selector) return false;
+        bool isSetGuard = selector == ISafe.setGuard.selector;
+        if (!isSetGuard && selector != ISafe.setModuleGuard.selector) return false;
 
         uint256 word = MemoryReader.readUint256(data, SELECTOR_SIZE);
         if (word >> ADDRESS_BITS != 0) return false; // dirty address encoding: not an escape shape

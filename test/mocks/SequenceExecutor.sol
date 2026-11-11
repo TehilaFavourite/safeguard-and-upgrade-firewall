@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
 /// @notice Runs several calls inside one call frame, so they share one Ethereum transaction's

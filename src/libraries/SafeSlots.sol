@@ -1,8 +1,7 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {ISafe} from "safe-smart-account/contracts/interfaces/ISafe.sol";
-
+import {ISafe} from "../interfaces/ISafe.sol";
 import {ISafeFirewallGuard} from "../interfaces/ISafeFirewallGuard.sol";
 
 /// @notice The proxy's own `masterCopy()` shortcut, answered from slot 0 by the proxy bytecode without

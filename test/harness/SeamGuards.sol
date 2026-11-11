@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: LGPL-3.0-only
+// SPDX-License-Identifier: MIT
 pragma solidity 0.8.28;
 
-import {Enum} from "safe-smart-account/contracts/libraries/Enum.sol";
+import {Enum} from "../../src/interfaces/Enum.sol";
 
 import {SafeFirewallGuardHarness} from "./SafeFirewallGuardHarness.sol";
 import {SafeSlots} from "../../src/libraries/SafeSlots.sol";
